@@ -1,0 +1,69 @@
+package main
+
+import (
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+type Recommendation struct {
+	ID      uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID  uint   `gorm:"not null;index"           json:"userId"`
+	Content string `gorm:"not null"                 json:"content"`
+}
+
+var db *gorm.DB
+
+func main() {
+	var err error
+	db, err = gorm.Open(postgres.Open(os.Getenv("DATABASE_URL")), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("db connect: %v", err)
+	}
+	db.AutoMigrate(&Recommendation{})
+
+	r := gin.Default()
+	r.GET("/actuator/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "UP"}) })
+
+	rec := r.Group("/api/recommendations")
+	rec.POST("/add", addRecommendation)
+	rec.GET("/get", getRecommendations)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8087"
+	}
+	log.Fatal(r.Run(":" + port))
+}
+
+func addRecommendation(c *gin.Context) {
+	userID, err := strconv.ParseUint(c.Query("userId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "userId required"})
+		return
+	}
+	content := c.Query("content")
+	if content == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "content required"})
+		return
+	}
+	rec := Recommendation{UserID: uint(userID), Content: content}
+	db.Create(&rec)
+	c.JSON(http.StatusCreated, rec)
+}
+
+func getRecommendations(c *gin.Context) {
+	userID, err := strconv.ParseUint(c.Query("userId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "userId required"})
+		return
+	}
+	var list []Recommendation
+	db.Where("user_id = ?", userID).Find(&list)
+	c.JSON(http.StatusOK, list)
+}
