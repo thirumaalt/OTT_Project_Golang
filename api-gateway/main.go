@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -74,12 +75,29 @@ func authMiddleware() gin.HandlerFunc {
 }
 
 func corsMiddleware() gin.HandlerFunc {
-	allowed := os.Getenv("ALLOWED_ORIGINS")
-	if allowed == "" {
-		allowed = "http://localhost:5173"
+	allowedOriginsStr := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOriginsStr == "" {
+		allowedOriginsStr = "http://localhost:5173"
 	}
+	allowedOrigins := strings.Split(allowedOriginsStr, ",")
+	for i, o := range allowedOrigins {
+		allowedOrigins[i] = strings.TrimSpace(o)
+	}
+
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", allowed)
+		origin := c.GetHeader("Origin")
+		if origin != "" {
+			for _, allowed := range allowedOrigins {
+				if allowed == "*" || allowed == origin {
+					c.Header("Access-Control-Allow-Origin", origin)
+					break
+				}
+			}
+		} else {
+			if len(allowedOrigins) > 0 {
+				c.Header("Access-Control-Allow-Origin", allowedOrigins[0])
+			}
+		}
 		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH,OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Authorization,Content-Type")
 		c.Header("Access-Control-Allow-Credentials", "true")
