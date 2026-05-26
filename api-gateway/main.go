@@ -41,6 +41,8 @@ func main() {
 	protected.Any("/api/watchhistory/*path", proxy.To(envURL("WATCHHISTORY_BASE_URL", "http://watchhistory-service:8090")+"/api/watchhistory"))
 	protected.Any("/api/metadata/*path", proxy.To(envURL("METADATA_BASE_URL", "http://metadata-service:8088")+"/api/metadata"))
 	protected.Any("/api/media/*path", proxy.MediaProxy(envURL("MEDIA_BASE_URL", "http://media-library-service:8001")+"/api/media"))
+	protected.Any("/api/transcoding/status", proxy.To(envURL("TRANSCODING_BASE_URL", "http://transcoding-service:8092")+"/queue/status"))
+	protected.Any("/api/transcoding/transcode", proxy.To(envURL("TRANSCODING_BASE_URL", "http://transcoding-service:8092")+"/transcode"))
 
 	port := envURL("PORT", "8094")
 	log.Printf("API Gateway listening on :%s", port)

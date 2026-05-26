@@ -18,7 +18,7 @@ type MediaItem struct {
 }
 
 type Scanner struct {
-	mediaDir string
+	mediaDirs []string
 }
 
 var videoExtensions = map[string]bool{
@@ -34,95 +34,102 @@ var videoExtensions = map[string]bool{
 var skipKeywords = []string{"trailer", "teaser", "sample", "featurette"}
 
 func New(mediaDir string) *Scanner {
-	return &Scanner{mediaDir: mediaDir}
+	dirs := strings.Split(mediaDir, ",")
+	for i, d := range dirs {
+		dirs[i] = strings.TrimSpace(d)
+	}
+	return &Scanner{mediaDirs: dirs}
 }
 
 func (s *Scanner) ScanCategory(category, dirName string) ([]MediaItem, error) {
 	items := []MediaItem{}
-	categoryPath := filepath.Join(s.mediaDir, dirName)
 
-	// Check if directory exists (case-insensitive)
-	if _, err := os.Stat(categoryPath); os.IsNotExist(err) {
-		// Try to find case-insensitive match
-		entries, err := os.ReadDir(s.mediaDir)
-		if err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() && strings.EqualFold(entry.Name(), dirName) {
-					categoryPath = filepath.Join(s.mediaDir, entry.Name())
-					break
+	for _, baseDir := range s.mediaDirs {
+		categoryPath := filepath.Join(baseDir, dirName)
+
+		// Check if directory exists (case-insensitive)
+		if _, err := os.Stat(categoryPath); os.IsNotExist(err) {
+			// Try to find case-insensitive match
+			entries, err := os.ReadDir(baseDir)
+			if err == nil {
+				for _, entry := range entries {
+					if entry.IsDir() && strings.EqualFold(entry.Name(), dirName) {
+						categoryPath = filepath.Join(baseDir, entry.Name())
+						break
+					}
 				}
 			}
 		}
-	}
 
-	// Walk directory
-	err := filepath.Walk(categoryPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Skip errors
-		}
-
-		// Skip hidden files/directories
-		if strings.HasPrefix(info.Name(), ".") {
-			if info.IsDir() {
-				return filepath.SkipDir
+		// Walk directory
+		err := filepath.Walk(categoryPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil // Skip errors
 			}
-			return nil
-		}
 
-		// Skip directories
-		if info.IsDir() {
-			return nil
-		}
-
-		// Check extension
-		ext := strings.ToLower(filepath.Ext(info.Name()))
-		if !videoExtensions[ext] {
-			return nil
-		}
-
-		// Skip trailers, teasers, etc.
-		lowerName := strings.ToLower(info.Name())
-		for _, keyword := range skipKeywords {
-			if strings.Contains(lowerName, keyword) {
+			// Skip hidden files/directories
+			if strings.HasPrefix(info.Name(), ".") {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
 				return nil
 			}
-		}
 
-		// Get relative path
-		relPath, err := filepath.Rel(s.mediaDir, path)
-		if err != nil {
+			// Skip directories
+			if info.IsDir() {
+				return nil
+			}
+
+			// Check extension
+			ext := strings.ToLower(filepath.Ext(info.Name()))
+			if !videoExtensions[ext] {
+				return nil
+			}
+
+			// Skip trailers, teasers, etc.
+			lowerName := strings.ToLower(info.Name())
+			for _, keyword := range skipKeywords {
+				if strings.Contains(lowerName, keyword) {
+					return nil
+				}
+			}
+
+			// Get relative path
+			relPath, err := filepath.Rel(baseDir, path)
+			if err != nil {
+				return nil
+			}
+
+			// Generate ID
+			itemID := strings.ReplaceAll(relPath, string(os.PathSeparator), "_")
+
+			// Clean title
+			title := cleanTitle(info.Name())
+
+			// Check for HLS
+			hlsPath := filepath.Join(baseDir, "hls", itemID, "master.m3u8")
+			var hlsURL *string
+			if _, err := os.Stat(hlsPath); err == nil {
+				url := "/media/hls/" + itemID + "/master.m3u8"
+				hlsURL = &url
+			}
+
+			items = append(items, MediaItem{
+				ID:           itemID,
+				Title:        title,
+				Category:     category,
+				Path:         filepath.ToSlash(relPath),
+				HLSUrl:       hlsURL,
+				Size:         info.Size(),
+				ModifiedTime: float64(info.ModTime().Unix()),
+			})
+
 			return nil
-		}
-
-		// Generate ID
-		itemID := strings.ReplaceAll(relPath, string(os.PathSeparator), "_")
-
-		// Clean title
-		title := cleanTitle(info.Name())
-
-		// Check for HLS
-		hlsPath := filepath.Join(s.mediaDir, "hls", itemID, "master.m3u8")
-		var hlsURL *string
-		if _, err := os.Stat(hlsPath); err == nil {
-			url := "/media/hls/" + itemID + "/master.m3u8"
-			hlsURL = &url
-		}
-
-		items = append(items, MediaItem{
-			ID:           itemID,
-			Title:        title,
-			Category:     category,
-			Path:         filepath.ToSlash(relPath),
-			HLSUrl:       hlsURL,
-			Size:         info.Size(),
-			ModifiedTime: float64(info.ModTime().Unix()),
 		})
 
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
+		if err != nil {
+			// Continue to next directory
+		}
 	}
 
 	return items, nil
@@ -182,11 +189,29 @@ func (s *Scanner) Search(query, category string) ([]MediaItem, error) {
 }
 
 func (s *Scanner) GetMediaPath(relativePath string) string {
-	return filepath.Join(s.mediaDir, filepath.FromSlash(relativePath))
+	for _, dir := range s.mediaDirs {
+		p := filepath.Join(dir, filepath.FromSlash(relativePath))
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	if len(s.mediaDirs) > 0 {
+		return filepath.Join(s.mediaDirs[0], filepath.FromSlash(relativePath))
+	}
+	return ""
 }
 
 func (s *Scanner) GetHLSPath(fileID, filename string) string {
-	return filepath.Join(s.mediaDir, "hls", fileID, filename)
+	for _, dir := range s.mediaDirs {
+		p := filepath.Join(dir, "hls", fileID, filename)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	if len(s.mediaDirs) > 0 {
+		return filepath.Join(s.mediaDirs[0], "hls", fileID, filename)
+	}
+	return ""
 }
 
 func cleanTitle(filename string) string {

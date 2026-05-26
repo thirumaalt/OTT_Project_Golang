@@ -19,10 +19,11 @@ func SystemHealth(c *gin.Context) {
 		"analytics":      getEnv("ANALYTICS_BASE_URL", "http://analytics-service:8086") + "/actuator/health",
 		"recommendation": getEnv("RECOMMENDATION_BASE_URL", "http://recommendation-service:8087") + "/actuator/health",
 		"watchhistory":   getEnv("WATCHHISTORY_BASE_URL", "http://watchhistory-service:8090") + "/actuator/health",
-		"metadata":       getEnv("METADATA_BASE_URL", "http://metadata-service:8088") + "/actuator/health",
+		"metadata":       getEnv("METADATA_BASE_URL", "http://metadata-service:8088") + "/api/metadata/all",
 		"interaction":    getEnv("INTERACTION_BASE_URL", "http://interaction-service:8089") + "/actuator/health",
 		"payment":        getEnv("PAYMENT_BASE_URL", "http://payment-service:8091") + "/actuator/health",
 		"subscription":   getEnv("SUBSCRIPTION_BASE_URL", "http://subscription-service:8093") + "/actuator/health",
+		"transcoding":    getEnv("TRANSCODING_BASE_URL", "http://transcoding-service:8092") + "/health",
 	}
 
 	results := make(map[string]bool, len(services)+1)
