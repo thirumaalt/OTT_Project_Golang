@@ -138,10 +138,9 @@ services:
       - "8001:8001"
     environment:
       PORT: "8001"
-      MEDIA_DATA_DIR: /media/d_media,/media/g_to_watch
+      MEDIA_DATA_DIR: /media/d_media
     volumes:
       - "D:/media:/media/d_media:ro"
-      - "G:/To Watch:/media/g_to_watch:ro"
     restart: unless-stopped
 
   frontend:
@@ -153,7 +152,7 @@ services:
     ports:
       - "5173:80"
     volumes:
-      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend-ui/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - api-gateway
     restart: unless-stopped
@@ -176,11 +175,10 @@ services:
       context: ./transcoding-service
       dockerfile: Dockerfile
     environment:
-      MEDIA_DATA_DIR: /media/d_media,/media/g_to_watch
+      MEDIA_DATA_DIR: /media/d_media
       HLS_OUTPUT_DIR: /media/hls
     volumes:
       - "D:/media:/media/d_media"
-      - "G:/To Watch:/media/g_to_watch"
     ports:
       - "8092:8092"
     restart: unless-stopped
@@ -202,22 +200,22 @@ services:
     ports:
       - "9113:9113"
 
-prometheus:
-  image: prom/prometheus:latest
-  container_name: prometheus
-  ports:
-    - "9090:9090"
-  volumes:
-    - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
-  restart: unless-stopped
+# prometheus:
+#   image: prom/prometheus:latest
+#   container_name: prometheus
+#   ports:
+#     - "9090:9090"
+#   volumes:
+#     - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+#   restart: unless-stopped
 
-grafana:
-  image: grafana/grafana:latest
-  container_name: grafana
-  ports:
-    - "3001:3000"
-  restart: unless-stopped
-  depends_on:
-    - prometheus
+# grafana:
+#   image: grafana/grafana:latest
+#   container_name: grafana
+#   ports:
+#     - "3001:3000"
+#   restart: unless-stopped
+#   depends_on:
+#     - prometheus
 volumes:
   pgdata:
