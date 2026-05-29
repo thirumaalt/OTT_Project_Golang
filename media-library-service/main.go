@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/myflix/media-library-service/handler"
 	"github.com/myflix/media-library-service/scanner"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -23,7 +24,7 @@ func main() {
 	h := handler.New(s)
 
 	r := gin.Default()
-
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	// Health check
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "media_dir": mediaDir})

@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/myflix/api-gateway/proxy"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var jwtSecret []byte
@@ -21,6 +22,8 @@ func main() {
 	jwtSecret = []byte(secret)
 
 	r := gin.Default()
+	// Prometheus metrics endpoint
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	r.Use(corsMiddleware())
 
 	// Health

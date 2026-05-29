@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/myflix/user-service/handler"
 	"github.com/myflix/user-service/store"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -17,14 +18,14 @@ func main() {
 
 	r := gin.Default()
 	r.GET("/actuator/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "UP"}) })
-
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	u := r.Group("/api/user")
 	u.POST("", h.CreateUser)
 	u.GET("/:id", h.GetUser)
 
 	// Profiles
 	u.POST("/profiles", h.CreateProfile)
-	u.GET("/profiles", h.GetProfiles)       // ?userId=
+	u.GET("/profiles", h.GetProfiles) // ?userId=
 	u.GET("/profiles/:id", h.GetProfile)
 	u.DELETE("/profiles/:id", h.DeleteProfile)
 

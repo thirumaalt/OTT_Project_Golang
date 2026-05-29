@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -31,8 +32,8 @@ func main() {
 	db.AutoMigrate(&Analytics{})
 
 	r := gin.Default()
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	r.GET("/actuator/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "UP"}) })
-
 	a := r.Group("/api/analytics")
 	a.POST("/record", recordAction)
 	a.GET("/all", getAll)

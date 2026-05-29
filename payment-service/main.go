@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -29,7 +30,7 @@ func main() {
 
 	r := gin.Default()
 	r.GET("/actuator/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "UP"}) })
-
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	p := r.Group("/api/payment")
 	p.POST("/create-order", createOrder)
 	p.POST("/capture-payment", capturePayment)

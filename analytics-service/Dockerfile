@@ -1,7 +1,9 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.23 AS builder
 WORKDIR /app
 COPY . .
-RUN GOFLAGS=-mod=mod go build -ldflags="-s -w" -o analytics-service .
+#RUN GOFLAGS=-mod=mod go build -ldflags="-s -w" -o analytics-service .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    GOFLAGS=-mod=mod go build -ldflags="-s -w" -o analytics-service .
 
 FROM scratch
 COPY --from=builder /app/analytics-service /analytics-service

@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/myflix/auth-service/handler"
 	"github.com/myflix/auth-service/store"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -16,6 +17,7 @@ func main() {
 	h := handler.New(db, os.Getenv("JWT_SECRET"))
 
 	r := gin.Default()
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	r.GET("/actuator/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "UP"}) })
 
 	auth := r.Group("/api/auth")

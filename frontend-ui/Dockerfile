@@ -1,32 +1,23 @@
-# frontend-ui/Dockerfile
-# Stage 1: build
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install build tools
 RUN apk add --no-cache python3 make g++ bash
 
-# Copy package manifests first for better caching
+# Build context is Project_1_Traditional/frontend-ui
 COPY package.json ./
-
-# Install deps (including devDependencies required for Tailwind & Vite build)
 RUN npm install
-
-# Copy source
 COPY . .
 
-# Build (Tailwind will run via PostCSS during Vite build)
+# Empty VITE_API_BASE makes all /api calls relative — nginx proxies them to the gateway
+ARG VITE_API_BASE=""
+ENV VITE_API_BASE=${VITE_API_BASE}
 ENV NODE_ENV=production
+# Write .env so Vite picks it up regardless of ARG propagation
+RUN echo "VITE_API_BASE=" > .env
 RUN npm run build
 
-# Stage 2: production image (lightweight)
-FROM nginx:stable-alpine AS runner
-# Copy built assets from builder
+FROM nginx:stable-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Serve single-page app fallback for index.html
-RUN apk add --no-cache bash
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 5173
+# nginx.conf is injected via volume mount in docker-compose — no COPY needed here
+EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

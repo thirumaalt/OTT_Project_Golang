@@ -7,6 +7,8 @@ from transcoder import transcode_to_hls
 from pathlib import Path
 from file_watcher import FileWatcherService
 from kafka_consumer import start_kafka_consumer
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
 
 # Logging Setup
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -87,6 +89,13 @@ async def shutdown_event():
 
 
 @app.get("/health")
+
+@app.get("/metrics")
+async def metrics():
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 async def health():
     """Health check endpoint."""
     return {
@@ -169,4 +178,5 @@ def get_queue_status():
             "storage_type": STORAGE_TYPE,
             "message": "Queue status not available for S3 storage (async processing)"
         }
+
 
