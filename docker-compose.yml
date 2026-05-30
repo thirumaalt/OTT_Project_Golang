@@ -20,7 +20,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -156,19 +156,19 @@ services:
     depends_on:
       - api-gateway
     restart: unless-stopped
-  # metadata-service:
-  #   build: ../OTT/backend/media/metadata-service-java
-  #   environment:
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/myflix
-  #     SPRING_DATASOURCE_USERNAME: postgres
-  #     SPRING_DATASOURCE_PASSWORD: postgres
-  #     TMDB_API_KEY: ebe7d8b6bb429b017bf62e41a4f42820
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   ports:
-  #     - "8088:8088"
-  #   restart: unless-stopped
+  metadata-service:
+    build: ./metadata-service
+    ports:
+      - "8088:8088"
+    environment:
+      <<: *common-env
+      PORT: "8088"
+      TMDB_API_KEY: ${TMDB_API_KEY:-ebe7d8b6bb429b017bf62e41a4f42820}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 
   transcoding-service:
     build:
@@ -200,22 +200,22 @@ services:
     ports:
       - "9113:9113"
 
-# prometheus:
-#   image: prom/prometheus:latest
-#   container_name: prometheus
-#   ports:
-#     - "9090:9090"
-#   volumes:
-#     - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
-#   restart: unless-stopped
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
 
-# grafana:
-#   image: grafana/grafana:latest
-#   container_name: grafana
-#   ports:
-#     - "3001:3000"
-#   restart: unless-stopped
-#   depends_on:
-#     - prometheus
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    depends_on:
+      - prometheus
 volumes:
   pgdata:

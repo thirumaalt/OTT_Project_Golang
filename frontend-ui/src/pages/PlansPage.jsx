@@ -12,6 +12,16 @@ export default function PlansPage() {
         { id: "PREMIUM", name: "Premium", price: 499, features: ["4K HDR Streaming", "4 Devices", "No Ads", "Offline Downloads"] },
     ];
 
+    const loadRazorpay = () =>
+        new Promise((resolve) => {
+            if (window.Razorpay) { resolve(true); return; }
+            const script = document.createElement("script");
+            script.src = "https://checkout.razorpay.com/v1/checkout.js";
+            script.onload = () => resolve(true);
+            script.onerror = () => resolve(false);
+            document.body.appendChild(script);
+        });
+
     const handleSubscribe = async (plan) => {
         if (plan.price === 0) {
             alert("You are now on the Free plan!");
@@ -23,42 +33,44 @@ export default function PlansPage() {
             // 1. Create Order
             const order = await api(`/payment/create-order?amount=${plan.price}`, { method: "POST" });
 
-            // CHECK FOR MOCK ORDER
-            if (order.razorpayOrderId.startsWith("order_mock_")) {
+            // Mock order — bypass Razorpay entirely
+            if (!order.razorpayOrderId || order.razorpayOrderId.startsWith("order_mock_")) {
                 console.log("Mock Order detected, bypassing Razorpay...");
-                await new Promise(r => setTimeout(r, 1500)); // Simulate delay
-
+                await new Promise(r => setTimeout(r, 1000));
                 await api(`/payment/capture-payment?orderId=${order.razorpayOrderId}`, { method: "POST" });
                 await api(`/subscription/upgrade?userId=${user.id}&plan=${plan.id}`, { method: "POST" });
-
-                alert(`Success! You are now subscribed to ${plan.name} (Mock Mode)`);
-                setLoading(false);
+                alert(`✅ Success! You are now subscribed to ${plan.name} (Demo Mode)`);
                 return;
             }
 
+            // 2. Load Razorpay SDK dynamically
+            const sdkLoaded = await loadRazorpay();
+            if (!sdkLoaded || !window.Razorpay) {
+                // Razorpay unavailable — simulate payment in demo mode
+                await api(`/payment/capture-payment?orderId=${order.razorpayOrderId}`, { method: "POST" });
+                await api(`/subscription/upgrade?userId=${user.id}&plan=${plan.id}`, { method: "POST" });
+                alert(`✅ Success! You are now subscribed to ${plan.name} (Demo Mode)`);
+                return;
+            }
+
+            // 3. Open Razorpay checkout
+            const rzpKey = import.meta.env.VITE_RAZORPAY_KEY_ID || "";
             const options = {
-                key: "rzp_test_placeholder", // Replace with actual key if available
+                key: rzpKey,
                 amount: order.amount,
-                currency: order.currency,
-                name: "OTT Platform",
+                currency: order.currency || "INR",
+                name: "MyFlix",
                 description: `Subscribe to ${plan.name}`,
                 order_id: order.razorpayOrderId,
                 handler: async function (response) {
-                    // 2. Capture Payment (Simulated)
                     await api(`/payment/capture-payment?orderId=${order.razorpayOrderId}`, { method: "POST" });
-
-                    // 3. Upgrade Subscription
                     await api(`/subscription/upgrade?userId=${user.id}&plan=${plan.id}`, { method: "POST" });
-
-                    alert(`Success! You are now subscribed to ${plan.name}`);
+                    alert(`✅ Success! You are now subscribed to ${plan.name}`);
                 },
                 prefill: {
-                    name: user.username,
                     email: user.email,
                 },
-                theme: {
-                    color: "#E50914",
-                },
+                theme: { color: "#E50914" },
             };
 
             const rzp = new window.Razorpay(options);
@@ -71,6 +83,7 @@ export default function PlansPage() {
             setLoading(false);
         }
     };
+
 
     return (
         <div className="min-h-screen pt-24 px-4 md:px-12 bg-black text-white">

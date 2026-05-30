@@ -4,9 +4,10 @@ export default function InfoModal({ item, onClose, onPlay }) {
   if (!item) return null;
 
   const metadata = item.metadata;
+  const fallbackPoster = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600"><rect width="400" height="600" fill="#1a1a2e"/><rect x="0" y="0" width="400" height="4" fill="#e50914"/><text x="200" y="290" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">${(item?.title || item?.filename || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').substring(0,28)}</text><text x="200" y="330" font-family="Arial,sans-serif" font-size="14" fill="#888" text-anchor="middle">No poster available</text></svg>`).replace(/#/g,'%23')}`;
   const poster = metadata?.poster_path
     ? `https://image.tmdb.org/t/p/w500${metadata.poster_path}`
-    : (item.poster || `https://via.placeholder.com/400x600.png?text=${encodeURIComponent(item.title || item.filename)}`);
+    : (item?.poster || fallbackPoster);
 
   const backdrop = metadata?.backdrop_path
     ? `https://image.tmdb.org/t/p/original${metadata.backdrop_path}`

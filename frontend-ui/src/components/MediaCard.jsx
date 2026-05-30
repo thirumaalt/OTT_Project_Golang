@@ -89,14 +89,15 @@ export default function MediaCard({ item, onInfo, onPlay, onRemove, inWatchlist:
   };
 
   const posterPath = metadata?.poster_path;
+  const fallbackPoster = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600"><rect width="400" height="600" fill="#1a1a2e"/><rect x="0" y="0" width="400" height="4" fill="#e50914"/><text x="200" y="290" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">${(item.title || item.filename || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').substring(0,28)}</text><text x="200" y="330" font-family="Arial,sans-serif" font-size="14" fill="#888" text-anchor="middle">No poster available</text></svg>`).replace(/#/g,'%23')}`;
   const poster = posterPath
     ? `https://image.tmdb.org/t/p/w500${posterPath}`
-    : (item.poster || `https://via.placeholder.com/400x600.png?text=${encodeURIComponent(item.title || item.filename)}`);
+    : (item.poster || fallbackPoster);
 
   return (
     <div
       className="relative group cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-10"
-      onClick={() => onInfo(item)}
+      onClick={() => onInfo({ ...item, metadata })}
     >
       {/* Heart Icon */}
       <button
@@ -146,7 +147,7 @@ export default function MediaCard({ item, onInfo, onPlay, onRemove, inWatchlist:
           </div>
           <div className="flex gap-2 mt-3">
             <button
-              onClick={(e) => { e.stopPropagation(); onPlay(item); }}
+              onClick={(e) => { e.stopPropagation(); onPlay({ ...item, metadata }); }}
               className="flex-1 px-3 py-1.5 bg-white text-black rounded text-xs font-bold hover:bg-gray-200 transition flex items-center justify-center gap-1"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -155,7 +156,7 @@ export default function MediaCard({ item, onInfo, onPlay, onRemove, inWatchlist:
               Play
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); onInfo(item); }}
+              onClick={(e) => { e.stopPropagation(); onInfo({ ...item, metadata }); }}
               className="px-3 py-1.5 bg-white/20 text-white rounded text-xs hover:bg-white/30 transition backdrop-blur-sm"
             >
               Info

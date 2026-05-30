@@ -46,19 +46,33 @@ func (s *Scanner) ScanCategory(category, dirName string) ([]MediaItem, error) {
 
 	for _, baseDir := range s.mediaDirs {
 		categoryPath := filepath.Join(baseDir, dirName)
+		foundSubdir := true
 
 		// Check if directory exists (case-insensitive)
 		if _, err := os.Stat(categoryPath); os.IsNotExist(err) {
 			// Try to find case-insensitive match
+			foundSubdir = false
 			entries, err := os.ReadDir(baseDir)
 			if err == nil {
 				for _, entry := range entries {
 					if entry.IsDir() && strings.EqualFold(entry.Name(), dirName) {
 						categoryPath = filepath.Join(baseDir, entry.Name())
+						foundSubdir = true
 						break
 					}
 				}
 			}
+		}
+
+		// If "Movies" category is requested but no subdirectory found,
+		// fall back to scanning root-level files.
+		if !foundSubdir && strings.EqualFold(category, "Movies") {
+			rootItems, _ := s.scanRoot()
+			items = append(items, rootItems...)
+			continue
+		}
+		if !foundSubdir {
+			continue
 		}
 
 		// Walk directory
@@ -156,7 +170,79 @@ func (s *Scanner) ScanAll() ([]MediaItem, error) {
 		allItems = append(allItems, items...)
 	}
 
+	// If no items found from category subdirs, fall back to scanning root files.
+	// This handles flat media layouts where files sit directly in the media dir.
+	if len(allItems) == 0 {
+		rootItems, err := s.scanRoot()
+		if err == nil {
+			allItems = append(allItems, rootItems...)
+		}
+	}
+
 	return allItems, nil
+}
+
+// scanRoot scans video files directly in the top-level of each mediaDir
+// and assigns them the "Movies" category.
+func (s *Scanner) scanRoot() ([]MediaItem, error) {
+	items := []MediaItem{}
+	for _, baseDir := range s.mediaDirs {
+		entries, err := os.ReadDir(baseDir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if strings.HasPrefix(name, ".") {
+				continue
+			}
+			ext := strings.ToLower(filepath.Ext(name))
+			if !videoExtensions[ext] {
+				continue
+			}
+			lowerName := strings.ToLower(name)
+			skip := false
+			for _, kw := range skipKeywords {
+				if strings.Contains(lowerName, kw) {
+					skip = true
+					break
+				}
+			}
+			if skip {
+				continue
+			}
+
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+
+			itemID := strings.ReplaceAll(name, string(os.PathSeparator), "_")
+			title := cleanTitle(name)
+
+			// Check for HLS
+			hlsPath := filepath.Join(baseDir, "hls", itemID, "master.m3u8")
+			var hlsURL *string
+			if _, err := os.Stat(hlsPath); err == nil {
+				url := "/media/hls/" + itemID + "/master.m3u8"
+				hlsURL = &url
+			}
+
+			items = append(items, MediaItem{
+				ID:           itemID,
+				Title:        title,
+				Category:     "Movies",
+				Path:         filepath.ToSlash(name),
+				HLSUrl:       hlsURL,
+				Size:         info.Size(),
+				ModifiedTime: float64(info.ModTime().Unix()),
+			})
+		}
+	}
+	return items, nil
 }
 
 func (s *Scanner) Search(query, category string) ([]MediaItem, error) {

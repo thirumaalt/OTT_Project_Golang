@@ -75,14 +75,14 @@ export default function FeaturedHero({ onPlay, onInfo }) {
 
                     <div className="flex items-center gap-4 pt-4">
                         <button
-                            onClick={() => onPlay(featuredItem)}
+                            onClick={() => onPlay({ ...featuredItem, metadata })}
                             className="px-8 py-3 bg-white text-black font-bold rounded hover:bg-white/90 transition flex items-center gap-2 text-xl"
                         >
                             <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                             Play
                         </button>
                         <button
-                            onClick={() => onInfo(featuredItem)}
+                            onClick={() => onInfo({ ...featuredItem, metadata })}
                             className="px-8 py-3 bg-gray-500/70 text-white font-bold rounded hover:bg-gray-500/50 transition flex items-center gap-2 text-xl backdrop-blur-sm"
                         >
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>

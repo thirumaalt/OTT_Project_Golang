@@ -57,10 +57,19 @@ func main() {
 func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := ""
+
+		// 1. Try Authorization header (standard API calls)
 		auth := c.GetHeader("Authorization")
 		if len(auth) > 7 && auth[:7] == "Bearer " {
 			tokenStr = auth[7:]
 		}
+
+		// 2. Fall back to ?token= query param (needed for <video> / HLS streaming
+		//    where the browser cannot set custom headers)
+		if tokenStr == "" {
+			tokenStr = c.Query("token")
+		}
+
 		if tokenStr == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization token"})
 			return

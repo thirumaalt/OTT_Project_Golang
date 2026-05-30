@@ -141,6 +141,13 @@ export default function VideoPlayer({ src, title, onClose, itemPath }) {
     };
   }, [src]);
 
+  // Sync fullscreen state when user exits via Escape or browser controls
+  useEffect(() => {
+    const onFsChange = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -165,8 +172,7 @@ export default function VideoPlayer({ src, title, onClose, itemPath }) {
           seekRelative(-10);
           break;
         case "escape":
-          if (fullscreen) toggleFullscreen();
-          else onClose();
+          if (!document.fullscreenElement) onClose();
           break;
       }
       showControlsTemporarily();
@@ -174,7 +180,7 @@ export default function VideoPlayer({ src, title, onClose, itemPath }) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [fullscreen]);
+  }, []);
 
   const togglePlay = () => {
     if (vidRef.current) {
@@ -230,11 +236,9 @@ export default function VideoPlayer({ src, title, onClose, itemPath }) {
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(console.error);
-      setFullscreen(true);
+      containerRef.current?.requestFullscreen().catch(console.error);
     } else {
       document.exitFullscreen().catch(console.error);
-      setFullscreen(false);
     }
   };
 
@@ -450,11 +454,17 @@ export default function VideoPlayer({ src, title, onClose, itemPath }) {
               </button>
 
               {/* Fullscreen */}
-              <button onClick={toggleFullscreen} className="text-white hover:text-gray-300 transition">
+              <button onClick={toggleFullscreen} className="text-white hover:text-gray-300 transition" title={fullscreen ? "Exit Fullscreen" : "Fullscreen"}>
                 {fullscreen ? (
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  // Compress / exit-fullscreen icon
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4m0 5H4m11-5v5m0 0h5M9 15v5m0-5H4m11 5v-5m0 0h5" />
+                  </svg>
                 ) : (
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                  // Expand / enter-fullscreen icon
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  </svg>
                 )}
               </button>
             </div>

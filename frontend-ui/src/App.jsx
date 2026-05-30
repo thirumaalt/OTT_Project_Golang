@@ -50,9 +50,11 @@ function MainApp() {
   const location = useLocation();
 
   const onPlay = (item) => {
+    const token = localStorage.getItem("token") || "";
+    const base = import.meta.env.VITE_API_BASE || "http://localhost:8094";
     let streamUrl = item.hls_url
-      ? `${import.meta.env.VITE_API_BASE || "http://localhost:8094"}${item.hls_url}`
-      : `${import.meta.env.VITE_API_BASE || "http://localhost:8094"}/media/stream?path=${encodeURIComponent(item.path)}`;
+      ? `${base}${item.hls_url}?token=${encodeURIComponent(token)}`
+      : `${base}/api/media/stream?path=${encodeURIComponent(item.path)}&token=${encodeURIComponent(token)}`;
 
     setPlayerSrc(streamUrl);
     setPlayerTitle(item.title || item.filename);
