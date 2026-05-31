@@ -169,7 +169,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-
   transcoding-service:
     build:
       context: ./transcoding-service
@@ -205,8 +204,10 @@ services:
     container_name: prometheus
     ports:
       - "9090:9090"
+
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
     restart: unless-stopped
 
   grafana:
@@ -214,8 +215,29 @@ services:
     container_name: grafana
     ports:
       - "3001:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
     restart: unless-stopped
     depends_on:
       - prometheus
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+
 volumes:
   pgdata:
+  grafana-storage:
+  prometheus-data:

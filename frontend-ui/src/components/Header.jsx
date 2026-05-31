@@ -50,9 +50,9 @@ export default function Header() {
                   <Link to="/profiles" className="block px-4 py-3 hover:bg-white/10 text-sm transition text-gray-300 hover:text-white">
                     Manage Profiles
                   </Link>
-                  <Link to="/admin" className="block px-4 py-3 hover:bg-white/10 text-sm transition text-gray-300 hover:text-white">
+                  <a href="/admin" className="block px-4 py-3 hover:bg-white/10 text-sm transition text-gray-300 hover:text-white">
                     Admin Dashboard
-                  </Link>
+                  </a>
                   <div className="border-t border-white/10 my-1"></div>
                   <button onClick={logout} className="w-full text-left px-4 py-3 hover:bg-white/10 text-sm transition text-gray-300 hover:text-white">
                     Sign Out

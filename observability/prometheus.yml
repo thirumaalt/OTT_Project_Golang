@@ -61,3 +61,13 @@ scrape_configs:
     static_configs:
       - targets:
           - media-library-service:8001
+
+  - job_name: cadvisor
+    static_configs:
+      - targets:
+          - cadvisor:8080
+
+  - job_name: node-exporter
+    static_configs:
+      - targets:
+          - node-exporter:9100

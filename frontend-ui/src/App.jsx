@@ -14,8 +14,6 @@ import VideoPlayer from "./components/VideoPlayer";
 import InfoModal from "./components/InfoModal";
 
 import ProfileSelection from "./pages/ProfileSelection";
-import AdminDashboard from "./pages/AdminDashboard";
-import AdminUpload from "./pages/AdminUpload";
 import PlansPage from "./pages/PlansPage";
 
 function ProtectedRoute({ children, requireProfile = false }) {
@@ -121,8 +119,6 @@ function MainApp() {
           <Route path="/movies" element={<Library categoryProp="Movies" onPlay={onPlay} onInfo={onInfo} />} />
           <Route path="/search" element={<SearchResults onPlay={onPlay} onInfo={onInfo} />} />
           <Route path="/mylist" element={<MyList onPlay={onPlay} onInfo={onInfo} />} />
-          <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-          <Route path="/admin/upload" element={<ProtectedRoute><AdminUpload /></ProtectedRoute>} />
           <Route path="/plans" element={<ProtectedRoute><PlansPage /></ProtectedRoute>} />
         </Routes>
       </main>
@@ -151,11 +147,6 @@ export default function App() {
           <Route path="/profiles" element={
             <ProtectedRoute>
               <ProfileSelection />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin" element={
-            <ProtectedRoute>
-              <AdminDashboard />
             </ProtectedRoute>
           } />
           <Route

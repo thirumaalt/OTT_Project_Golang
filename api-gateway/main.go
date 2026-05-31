@@ -4,17 +4,39 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/myflix/api-gateway/proxy"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var jwtSecret []byte
 
+var httpRequestsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "http_requests_total",
+		Help: "Total HTTP requests",
+	},
+	[]string{"method", "path", "status"},
+)
+
+var httpRequestDuration = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "http_request_duration_seconds",
+		Help:    "HTTP request latency",
+		Buckets: prometheus.DefBuckets,
+	},
+	[]string{"method", "path"},
+)
+
 func main() {
+	prometheus.MustRegister(httpRequestsTotal)
+	prometheus.MustRegister(httpRequestDuration)
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		log.Fatal("JWT_SECRET env var is required")
@@ -22,6 +44,7 @@ func main() {
 	jwtSecret = []byte(secret)
 
 	r := gin.Default()
+	r.Use(MetricsMiddleware())
 	// Prometheus metrics endpoint
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	r.Use(corsMiddleware())
@@ -54,6 +77,25 @@ func main() {
 	}
 }
 
+func MetricsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		start := time.Now()
+
+		c.Next()
+
+		httpRequestsTotal.WithLabelValues(
+			c.Request.Method,
+			c.FullPath(),
+			strconv.Itoa(c.Writer.Status()),
+		).Inc()
+
+		httpRequestDuration.WithLabelValues(
+			c.Request.Method,
+			c.FullPath(),
+		).Observe(time.Since(start).Seconds())
+	}
+}
 func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := ""
