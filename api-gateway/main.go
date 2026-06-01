@@ -11,8 +11,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/myflix/api-gateway/proxy"
+	"github.com/myflix/api-gateway/telemetry"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 var jwtSecret []byte
@@ -43,7 +46,11 @@ func main() {
 	}
 	jwtSecret = []byte(secret)
 
+	shutdown := telemetry.InitTracer("api-gateway")
+	defer shutdown()
+
 	r := gin.Default()
+	r.Use(TracingMiddleware())
 	r.Use(MetricsMiddleware())
 	// Prometheus metrics endpoint
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
@@ -96,6 +103,30 @@ func MetricsMiddleware() gin.HandlerFunc {
 		).Observe(time.Since(start).Seconds())
 	}
 }
+
+func TracingMiddleware() gin.HandlerFunc {
+	tracer := otel.Tracer("api-gateway")
+
+	return func(c *gin.Context) {
+
+		ctx := otel.GetTextMapPropagator().Extract(
+			c.Request.Context(),
+			propagation.HeaderCarrier(c.Request.Header),
+		)
+
+		ctx, span := tracer.Start(
+			ctx,
+			c.Request.Method+" "+c.FullPath(),
+		)
+
+		defer span.End()
+
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
+	}
+}
+
 func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := ""

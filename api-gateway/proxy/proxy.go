@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // To returns a gin handler that reverse-proxies to the given base URL.
@@ -44,11 +46,24 @@ func forward(c *gin.Context, target string, stream bool) {
 		return
 	}
 
-	req, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, target, strings.NewReader(string(body)))
+	req, err := http.NewRequestWithContext(
+		c.Request.Context(),
+		c.Request.Method,
+		target,
+		strings.NewReader(string(body)),
+	)
+
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build upstream request"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to build upstream request",
+		})
 		return
 	}
+
+	otel.GetTextMapPropagator().Inject(
+		c.Request.Context(),
+		propagation.HeaderCarrier(req.Header),
+	)
 
 	// Copy headers, skip Host
 	for k, vals := range c.Request.Header {
