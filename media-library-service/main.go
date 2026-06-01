@@ -7,7 +7,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/myflix/media-library-service/handler"
 	"github.com/myflix/media-library-service/scanner"
+	"github.com/myflix/media-library-service/telemetry"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 func main() {
@@ -23,7 +26,11 @@ func main() {
 	// Initialize handler
 	h := handler.New(s)
 
+	shutdown := telemetry.InitTracer("media-library-service")
+	defer shutdown()
+
 	r := gin.Default()
+	r.Use(TracingMiddleware())
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	// Health check
 	r.GET("/health", func(c *gin.Context) {
@@ -45,4 +52,27 @@ func main() {
 	log.Printf("Media Library Service listening on :%s", port)
 	log.Printf("Media directory: %s", mediaDir)
 	log.Fatal(r.Run(":" + port))
+}
+
+func TracingMiddleware() gin.HandlerFunc {
+	tracer := otel.Tracer("user-service")
+
+	return func(c *gin.Context) {
+
+		ctx := otel.GetTextMapPropagator().Extract(
+			c.Request.Context(),
+			propagation.HeaderCarrier(c.Request.Header),
+		)
+
+		ctx, span := tracer.Start(
+			ctx,
+			c.Request.Method+" "+c.FullPath(),
+		)
+
+		defer span.End()
+
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
+	}
 }

@@ -7,7 +7,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/myflix/recommendation-service/telemetry"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -28,7 +31,11 @@ func main() {
 	}
 	db.AutoMigrate(&Recommendation{})
 
+	shutdown := telemetry.InitTracer("recommendation-service")
+	defer shutdown()
+
 	r := gin.Default()
+	r.Use(TracingMiddleware())
 	r.GET("/actuator/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "UP"}) })
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	rec := r.Group("/api/recommendations")
@@ -67,4 +74,27 @@ func getRecommendations(c *gin.Context) {
 	var list []Recommendation
 	db.Where("user_id = ?", userID).Find(&list)
 	c.JSON(http.StatusOK, list)
+}
+
+func TracingMiddleware() gin.HandlerFunc {
+	tracer := otel.Tracer("api-gateway")
+
+	return func(c *gin.Context) {
+
+		ctx := otel.GetTextMapPropagator().Extract(
+			c.Request.Context(),
+			propagation.HeaderCarrier(c.Request.Header),
+		)
+
+		ctx, span := tracer.Start(
+			ctx,
+			c.Request.Method+" "+c.FullPath(),
+		)
+
+		defer span.End()
+
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
+	}
 }

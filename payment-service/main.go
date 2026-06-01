@@ -6,7 +6,10 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/myflix/payment-service/telemetry"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -28,7 +31,11 @@ func main() {
 	}
 	db.AutoMigrate(&PaymentOrder{})
 
+	shutdown := telemetry.InitTracer("payment-service")
+	defer shutdown()
+
 	r := gin.Default()
+	r.Use(TracingMiddleware())
 	r.GET("/actuator/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "UP"}) })
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	p := r.Group("/api/payment")
@@ -101,4 +108,27 @@ func randomSuffix() string {
 		b[i] = "abcdefghijklmnopqrstuvwxyz0123456789"[i%36]
 	}
 	return string(b)
+}
+
+func TracingMiddleware() gin.HandlerFunc {
+	tracer := otel.Tracer("api-gateway")
+
+	return func(c *gin.Context) {
+
+		ctx := otel.GetTextMapPropagator().Extract(
+			c.Request.Context(),
+			propagation.HeaderCarrier(c.Request.Header),
+		)
+
+		ctx, span := tracer.Start(
+			ctx,
+			c.Request.Method+" "+c.FullPath(),
+		)
+
+		defer span.End()
+
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
+	}
 }

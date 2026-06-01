@@ -9,6 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -30,7 +32,11 @@ func main() {
 	}
 	db.AutoMigrate(&Subscription{})
 
+	shutdown := telemetry.InitTracer("subscription-service")
+	defer shutdown()
+
 	r := gin.Default()
+	r.Use(TracingMiddleware())
 	r.GET("/actuator/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "UP"}) })
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	s := r.Group("/api/subscription")
@@ -82,4 +88,27 @@ func upgradeSubscription(c *gin.Context) {
 		db.Save(&sub)
 	}
 	c.JSON(http.StatusOK, sub)
+}
+
+func TracingMiddleware() gin.HandlerFunc {
+	tracer := otel.Tracer("user-service")
+
+	return func(c *gin.Context) {
+
+		ctx := otel.GetTextMapPropagator().Extract(
+			c.Request.Context(),
+			propagation.HeaderCarrier(c.Request.Header),
+		)
+
+		ctx, span := tracer.Start(
+			ctx,
+			c.Request.Method+" "+c.FullPath(),
+		)
+
+		defer span.End()
+
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
+	}
 }
