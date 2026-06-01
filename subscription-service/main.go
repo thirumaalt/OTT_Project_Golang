@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/myflix/subscription-service/telemetry"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -91,7 +92,7 @@ func upgradeSubscription(c *gin.Context) {
 }
 
 func TracingMiddleware() gin.HandlerFunc {
-	tracer := otel.Tracer("user-service")
+	tracer := otel.Tracer("subscription-service")
 
 	return func(c *gin.Context) {
 

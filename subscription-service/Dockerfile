@@ -1,4 +1,4 @@
-FROM golang:1.23 AS builder
+FROM golang:1.25 AS builder
 WORKDIR /app
 COPY . .
 #RUN GOFLAGS=-mod=mod go build -ldflags="-s -w" -o subscription-service .
