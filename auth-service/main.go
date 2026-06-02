@@ -17,7 +17,7 @@ func main() {
 	db := store.Connect(os.Getenv("DATABASE_URL"))
 	store.Migrate(db)
 
-	h := handler.New(db, os.Getenv("JWT_SECRET"))
+	h := handler.New(db, os.Getenv("JWT_SECRET"), os.Getenv("USER_SERVICE_URL"))
 
 	shutdown := telemetry.InitTracer("auth-service")
 	defer shutdown()

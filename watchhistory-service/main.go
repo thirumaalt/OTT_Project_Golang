@@ -37,8 +37,7 @@ func main() {
 	defer shutdown()
 
 	r := gin.Default()
-	shutdown := telemetry.InitTracer("user-service")
-	defer shutdown()
+	r.Use(TracingMiddleware())
 	r.GET("/actuator/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "UP"}) })
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	wh := r.Group("/api/watch-history")

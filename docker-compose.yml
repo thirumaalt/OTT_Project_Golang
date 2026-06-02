@@ -60,9 +60,12 @@ services:
     environment:
       <<: *common-env
       PORT: "8083"
+      USER_SERVICE_URL: http://user-service:8085
     depends_on:
       postgres:
         condition: service_healthy
+      user-service:
+        condition: service_started
 
   user-service:
     build: ./user-service
@@ -117,9 +120,12 @@ services:
       PORT: "8091"
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      SUBSCRIPTION_BASE_URL: http://subscription-service:8093
     depends_on:
       postgres:
         condition: service_healthy
+      subscription-service:
+        condition: service_started
 
   subscription-service:
     build: ./subscription-service
@@ -164,9 +170,15 @@ services:
       <<: *common-env
       PORT: "8088"
       TMDB_API_KEY: ${TMDB_API_KEY:-ebe7d8b6bb429b017bf62e41a4f42820}
+      RECOMMENDATION_BASE_URL: http://recommendation-service:8087
+      WATCHHISTORY_BASE_URL: http://watchhistory-service:8090
     depends_on:
       postgres:
         condition: service_healthy
+      recommendation-service:
+        condition: service_started
+      watchhistory-service:
+        condition: service_started
     restart: unless-stopped
 
   transcoding-service:

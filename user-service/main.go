@@ -28,6 +28,7 @@ func main() {
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	u := r.Group("/api/user")
 	u.POST("", h.CreateUser)
+	u.GET("/by-username", h.GetByUsername) // internal: auth-service calls this post-login
 	u.GET("/:id", h.GetUser)
 
 	// Profiles

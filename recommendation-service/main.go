@@ -77,7 +77,7 @@ func getRecommendations(c *gin.Context) {
 }
 
 func TracingMiddleware() gin.HandlerFunc {
-	tracer := otel.Tracer("api-gateway")
+	tracer := otel.Tracer("recommendation-service")
 
 	return func(c *gin.Context) {
 

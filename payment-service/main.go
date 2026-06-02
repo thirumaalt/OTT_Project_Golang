@@ -1,6 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -8,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/myflix/payment-service/telemetry"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"gorm.io/driver/postgres"
@@ -16,7 +23,9 @@ import (
 
 type PaymentOrder struct {
 	ID      string `gorm:"primaryKey"   json:"id"`
+	UserID  uint   `gorm:"not null"     json:"userId"`
 	Amount  int    `gorm:"not null"     json:"amount"`
+	PlanID  string `gorm:"not null"     json:"planId"`
 	Status  string `gorm:"not null"     json:"status"`
 	Receipt string `json:"receipt"`
 }
@@ -50,8 +59,12 @@ func main() {
 	log.Fatal(r.Run(":" + port))
 }
 
+// createOrderReq is the request body for POST /api/payment/create-order.
+// userId and planId are captured here so capturePayment can forward them.
 type createOrderReq struct {
-	Amount int `json:"amount" binding:"required,min=1"`
+	UserID uint   `json:"userId"  binding:"required"`
+	PlanID string `json:"planId"  binding:"required"`
+	Amount int    `json:"amount"  binding:"required,min=1"`
 }
 
 func createOrder(c *gin.Context) {
@@ -61,11 +74,11 @@ func createOrder(c *gin.Context) {
 		return
 	}
 
-	// TODO: integrate Razorpay SDK — generate real order ID via Razorpay API
-	// For now, create a pending order record
 	order := PaymentOrder{
 		ID:      generateOrderID(),
+		UserID:  req.UserID,
 		Amount:  req.Amount,
+		PlanID:  req.PlanID,
 		Status:  "CREATED",
 		Receipt: "receipt_" + generateOrderID(),
 	}
@@ -79,14 +92,56 @@ func capturePayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "orderId required"})
 		return
 	}
+
 	var order PaymentOrder
 	if err := db.First(&order, "id = ?", orderID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "order not found"})
 		return
 	}
+
 	order.Status = "CAPTURED"
 	db.Save(&order)
+
+	// ── Propagate trace context to subscription-service ──────────────────────
+	go func() {
+		ctx := c.Request.Context()
+		if err := notifySubscriptionService(ctx, order.UserID, order.PlanID); err != nil {
+			log.Printf("subscription-service notification failed: %v", err)
+		}
+	}()
+
 	c.JSON(http.StatusOK, order)
+}
+
+// notifySubscriptionService calls subscription-service with the captured
+// payment's userId and planId, propagating the current trace context so
+// Jaeger shows: payment-service → subscription-service.
+func notifySubscriptionService(ctx context.Context, userID uint, planID string) error {
+	subscriptionURL := fmt.Sprintf(
+		"%s/api/subscription/upgrade?userId=%d&plan=%s",
+		getEnv("SUBSCRIPTION_BASE_URL", "http://subscription-service:8093"),
+		userID, planID,
+	)
+
+	client := &http.Client{
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, subscriptionURL, bytes.NewReader(nil))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	// Inject W3C traceparent header so subscription-service continues the trace.
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("call subscription-service: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	log.Printf("subscription-service responded %d: %s", resp.StatusCode, body)
+	return nil
 }
 
 func getStatus(c *gin.Context) {
@@ -104,14 +159,21 @@ func generateOrderID() string {
 
 func randomSuffix() string {
 	b := make([]byte, 8)
-	for i := range b {
-		b[i] = "abcdefghijklmnopqrstuvwxyz0123456789"[i%36]
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand unavailable: " + err.Error())
 	}
-	return string(b)
+	return hex.EncodeToString(b)
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func TracingMiddleware() gin.HandlerFunc {
-	tracer := otel.Tracer("api-gateway")
+	tracer := otel.Tracer("payment-service")
 
 	return func(c *gin.Context) {
 

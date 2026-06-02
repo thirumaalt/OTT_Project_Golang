@@ -43,6 +43,25 @@ func (h *Handler) GetUser(c *gin.Context) {
 	c.JSON(http.StatusOK, u)
 }
 
+// GetByUsername looks up a user by their username query param.
+// Called internally by auth-service after a successful login to enrich the
+// login response with user-service data within the same distributed trace.
+//
+// GET /api/user/by-username?username=alice
+func (h *Handler) GetByUsername(c *gin.Context) {
+	username := c.Query("username")
+	if username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username query param is required"})
+		return
+	}
+	var u store.User
+	if err := h.db.Where("username = ?", username).First(&u).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	c.JSON(http.StatusOK, u)
+}
+
 // ── Profiles ─────────────────────────────────────────────────────────────────
 
 type createProfileReq struct {
