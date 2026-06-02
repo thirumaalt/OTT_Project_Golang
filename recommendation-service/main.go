@@ -29,6 +29,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("db connect: %v", err)
 	}
+	if err := db.Use(telemetry.NewGormPlugin()); err != nil {
+		log.Fatalf("otelgorm plugin: %v", err)
+	}
 	db.AutoMigrate(&Recommendation{})
 
 	shutdown := telemetry.InitTracer("recommendation-service")
@@ -61,7 +64,7 @@ func addRecommendation(c *gin.Context) {
 		return
 	}
 	rec := Recommendation{UserID: uint(userID), Content: content}
-	db.Create(&rec)
+	db.WithContext(c.Request.Context()).Create(&rec)
 	c.JSON(http.StatusCreated, rec)
 }
 
@@ -72,7 +75,7 @@ func getRecommendations(c *gin.Context) {
 		return
 	}
 	var list []Recommendation
-	db.Where("user_id = ?", userID).Find(&list)
+	db.WithContext(c.Request.Context()).Where("user_id = ?", userID).Find(&list)
 	c.JSON(http.StatusOK, list)
 }
 

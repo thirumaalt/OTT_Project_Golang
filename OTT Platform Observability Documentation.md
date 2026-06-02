@@ -6,15 +6,17 @@ This project implements a complete observability stack for monitoring microservi
 
 ### Components
 
-| Component      | Purpose                    |
-| -------------- | -------------------------- |
-| Prometheus     | Metrics Collection         |
-| Grafana        | Visualization & Dashboards |
-| Node Exporter  | Host Metrics               |
-| cAdvisor       | Container Metrics          |
-| Loki           | Log Storage                |
-| Promtail       | Log Collection             |
-| Docker Compose | Deployment                 |
+| Component      | Purpose                          |
+| -------------- | -------------------------------- |
+| Prometheus     | Metrics Collection               |
+| Grafana        | Visualization & Dashboards       |
+| Node Exporter  | Host Metrics                     |
+| cAdvisor       | Container Metrics                |
+| Loki           | Log Storage                      |
+| Promtail       | Log Collection                   |
+| Tempo          | Distributed Tracing Backend      |
+| OpenTelemetry  | Trace Instrumentation (v1.44.0)  |
+| Docker Compose | Deployment                       |
 
 ---
 
@@ -23,29 +25,18 @@ This project implements a complete observability stack for monitoring microservi
 ```text
 Applications
      |
-     | /metrics
-     ↓
-Prometheus
+     |── /metrics ──────────────► Prometheus ──► Grafana
      |
-     ↓
-Grafana
+     |── OTLP gRPC (traces) ────► Tempo ────────► Grafana (Drilldown)
+     |
+     └── stdout logs ───────────► Promtail ──────► Loki ──► Grafana Logs
 
 Docker Containers
-     |
-     ↓
-Promtail
-     |
-     ↓
-Loki
-     |
-     ↓
-Grafana Logs
+     └── cAdvisor ──────────────► Prometheus
 
 Host
- |
- ├── Node Exporter
- |
- └── cAdvisor
+     ├── Node Exporter ─────────► Prometheus
+     └── cAdvisor ──────────────► Prometheus
 ```
 
 ---
@@ -78,6 +69,7 @@ Host
 * grafana
 * loki
 * promtail
+* tempo
 * node-exporter
 * cadvisor
 
@@ -322,7 +314,53 @@ sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
 
 ---
 
-# 7. Logging Stack
+# 7. Distributed Tracing — Grafana Tempo + OpenTelemetry
+
+## How It Works
+
+All Go services are instrumented with OpenTelemetry v1.44.0. Traces are exported via OTLP gRPC to Grafana Tempo and visualised in Grafana's Traces Drilldown.
+
+```text
+Go Service
+    |
+    | OTLP gRPC (passthrough:///tempo:4317)
+    ↓
+Grafana Tempo :4317 / :3200
+    |
+    ↓
+Grafana Drilldown → Traces → Span Waterfall
+                           → Click LOG icon → Loki correlation
+```
+
+## Endpoint Configuration
+
+```text
+OTEL_EXPORTER_OTLP_ENDPOINT=tempo:4317
+```
+
+Set in `x-common-env` in `docker-compose.yml`. Falls back to `tempo:4317` if not set.
+
+## Traced Business Flows
+
+```text
+LOGIN FLOW
+  api-gateway → auth-service → user-service
+
+DISCOVERY FLOW
+  api-gateway → metadata-service → recommendation-service
+                                 → watchhistory-service
+
+SUBSCRIPTION FLOW
+  api-gateway → payment-service → subscription-service
+```
+
+## Trace → Log Correlation
+
+Clicking the LOG icon on any span in Grafana automatically jumps to Loki logs for that service at that exact timestamp. Configured via `tracesToLogsV2` in Grafana datasource provisioning.
+
+---
+
+# 8. Logging Stack
 
 ## Loki
 
@@ -381,67 +419,41 @@ Purpose:
 
 ---
 
-# 8. Current Observability Coverage
+# 9. Current Observability Coverage
 
-| Area             | Status |
-| ---------------- | ------ |
-| Service Health   | ✅      |
-| Host CPU         | ✅      |
-| Host Memory      | ✅      |
-| Container CPU    | ✅      |
-| Container Memory | ✅      |
-| Container Disk   | ✅      |
-| Service Uptime   | ✅      |
-| Request Rate     | ✅      |
-| Error Rate       | ✅      |
-| HTTP Status      | ✅      |
-| Latency          | ✅      |
-| Top Endpoints    | ✅      |
-| Centralized Logs | ✅      |
-| Docker Logs      | ✅      |
-
----
-
-# 9. Future Improvements
-
-### Alerting
-
-Implement:
-
-* Service Down Alert
-* High CPU Alert
-* High Memory Alert
-* High Error Rate Alert
-* Container Restart Alert
-
-### Distributed Tracing
-
-Add:
-
-```text
-OpenTelemetry
-+
-Jaeger
-```
-
-Benefits:
-
-* End-to-end request tracing
-* Service dependency visualization
-* Root cause analysis
+| Area                 | Status |
+| -------------------- | ------ |
+| Service Health       | ✅      |
+| Host CPU             | ✅      |
+| Host Memory          | ✅      |
+| Container CPU        | ✅      |
+| Container Memory     | ✅      |
+| Container Disk       | ✅      |
+| Service Uptime       | ✅      |
+| Request Rate         | ✅      |
+| Error Rate           | ✅      |
+| HTTP Status          | ✅      |
+| Latency              | ✅      |
+| Top Endpoints        | ✅      |
+| Centralized Logs     | ✅      |
+| Docker Logs          | ✅      |
+| Distributed Tracing  | ✅      |
+| Trace→Log Correlation| ✅      |
+| Alerting             | ✅      |
 
 ---
 
 # Current Maturity Level
 
 ```text
-Monitoring          ✅
-Infrastructure      ✅
-Container Metrics   ✅
-Application Metrics ✅
-Centralized Logs    ✅
-Alerting            ⏳
-Distributed Tracing ⏳
+Monitoring            ✅
+Infrastructure        ✅
+Container Metrics     ✅
+Application Metrics   ✅
+Centralized Logs      ✅
+Alerting              ✅
+Distributed Tracing   ✅
+Trace-Log Correlation ✅
 ```
 
-This is already a solid observability setup suitable for a DevOps portfolio project and demonstrates monitoring, logging, and application instrumentation skills.
+This is a production-grade observability setup implementing the full three-pillar strategy (Metrics + Logs + Traces) with cross-pillar correlation, suitable for a senior DevOps / platform engineering portfolio.

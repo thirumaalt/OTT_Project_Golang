@@ -32,6 +32,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("db connect: %v", err)
 	}
+	if err := db.Use(telemetry.NewGormPlugin()); err != nil {
+		log.Fatalf("otelgorm plugin: %v", err)
+	}
 	db.AutoMigrate(&Analytics{})
 
 	shutdown := telemetry.InitTracer("analytics-service")
@@ -66,13 +69,13 @@ func recordAction(c *gin.Context) {
 		return
 	}
 	a := Analytics{UserID: uint(userID), Action: action, ContentID: contentID, CreatedAt: time.Now()}
-	db.Create(&a)
+	db.WithContext(c.Request.Context()).Create(&a)
 	c.JSON(http.StatusCreated, a)
 }
 
 func getAll(c *gin.Context) {
 	var list []Analytics
-	db.Order("created_at desc").Find(&list)
+	db.WithContext(c.Request.Context()).Order("created_at desc").Find(&list)
 	c.JSON(http.StatusOK, list)
 }
 
@@ -81,7 +84,7 @@ func getStats(c *gin.Context) {
 		Action string
 		Count  int64
 	}
-	db.Model(&Analytics{}).Select("action, count(*) as count").Group("action").Scan(&results)
+	db.WithContext(c.Request.Context()).Model(&Analytics{}).Select("action, count(*) as count").Group("action").Scan(&results)
 	stats := make(map[string]int64, len(results))
 	for _, r := range results {
 		stats[r.Action] = r.Count
@@ -90,7 +93,7 @@ func getStats(c *gin.Context) {
 }
 
 func TracingMiddleware() gin.HandlerFunc {
-	tracer := otel.Tracer("api-gateway")
+	tracer := otel.Tracer("analytics-service")
 
 	return func(c *gin.Context) {
 

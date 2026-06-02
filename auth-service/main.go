@@ -14,13 +14,16 @@ import (
 )
 
 func main() {
+	shutdown := telemetry.InitTracer("auth-service")
+	defer shutdown()
+
 	db := store.Connect(os.Getenv("DATABASE_URL"))
+	if err := db.Use(telemetry.NewGormPlugin()); err != nil {
+		log.Fatalf("gorm plugin: %v", err)
+	}
 	store.Migrate(db)
 
 	h := handler.New(db, os.Getenv("JWT_SECRET"), os.Getenv("USER_SERVICE_URL"))
-
-	shutdown := telemetry.InitTracer("auth-service")
-	defer shutdown()
 
 	r := gin.Default()
 	r.Use(TracingMiddleware())

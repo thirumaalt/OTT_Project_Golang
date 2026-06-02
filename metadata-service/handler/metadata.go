@@ -36,7 +36,7 @@ func (h *Handler) GetByTitle(c *gin.Context) {
 
 	// 1. Check our DB for a cached entry by title (case-insensitive)
 	var m store.Media
-	if err := h.db.Where("title ILIKE ?", title).First(&m).Error; err == nil {
+	if err := h.db.WithContext(c.Request.Context()).Where("title ILIKE ?", title).First(&m).Error; err == nil {
 		// Build a TMDB-compatible response from our stored data
 		type tmdbResult struct {
 			ID           int     `json:"id"`
@@ -119,8 +119,8 @@ func (h *Handler) GetByTitle(c *gin.Context) {
 			MediaPath:   "tmdb://" + strconv.Itoa(r.ID),
 		}
 		var existing store.Media
-		if h.db.Where("tmdb_id = ?", r.ID).First(&existing).Error != nil {
-			h.db.Create(&entry)
+		if h.db.WithContext(c.Request.Context()).Where("tmdb_id = ?", r.ID).First(&existing).Error != nil {
+			h.db.WithContext(c.Request.Context()).Create(&entry)
 		}
 	}()
 
@@ -135,7 +135,7 @@ func (h *Handler) CreateMedia(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.db.Create(&m).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).Create(&m).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create metadata"})
 		return
 	}
@@ -151,7 +151,7 @@ func (h *Handler) GetMedia(c *gin.Context) {
 		return
 	}
 	var m store.Media
-	if err := h.db.Preload("Tags").First(&m, id).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).Preload("Tags").First(&m, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
@@ -168,7 +168,7 @@ func (h *Handler) GetByPath(c *gin.Context) {
 		return
 	}
 	var m store.Media
-	if err := h.db.Preload("Tags").Where("media_path = ?", path).First(&m).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).Preload("Tags").Where("media_path = ?", path).First(&m).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
@@ -191,7 +191,7 @@ func (h *Handler) ListMedia(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
-	q := h.db.Preload("Tags").Model(&store.Media{})
+	q := h.db.WithContext(c.Request.Context()).Preload("Tags").Model(&store.Media{})
 	if genre != "" {
 		q = q.Where("genre ILIKE ?", "%"+genre+"%")
 	}
@@ -224,7 +224,7 @@ func (h *Handler) SearchMedia(c *gin.Context) {
 	}
 	like := "%" + q + "%"
 	var items []store.Media
-	h.db.Preload("Tags").
+	h.db.WithContext(c.Request.Context()).Preload("Tags").
 		Where("title ILIKE ? OR description ILIKE ? OR cast ILIKE ? OR director ILIKE ?", like, like, like, like).
 		Limit(50).
 		Find(&items)
@@ -240,7 +240,7 @@ func (h *Handler) UpdateMedia(c *gin.Context) {
 		return
 	}
 	var m store.Media
-	if err := h.db.First(&m, id).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).First(&m, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
@@ -249,7 +249,7 @@ func (h *Handler) UpdateMedia(c *gin.Context) {
 		return
 	}
 	m.ID = uint(id)
-	h.db.Save(&m)
+	h.db.WithContext(c.Request.Context()).Save(&m)
 	c.JSON(http.StatusOK, m)
 }
 
@@ -261,7 +261,7 @@ func (h *Handler) DeleteMedia(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	h.db.Delete(&store.Media{}, id)
+	h.db.WithContext(c.Request.Context()).Delete(&store.Media{}, id)
 	c.Status(http.StatusNoContent)
 }
 
@@ -276,11 +276,11 @@ func (h *Handler) BulkUpsert(c *gin.Context) {
 	}
 	for i := range items {
 		var existing store.Media
-		if err := h.db.Where("media_path = ?", items[i].MediaPath).First(&existing).Error; err == nil {
+		if err := h.db.WithContext(c.Request.Context()).Where("media_path = ?", items[i].MediaPath).First(&existing).Error; err == nil {
 			items[i].ID = existing.ID
-			h.db.Save(&items[i])
+			h.db.WithContext(c.Request.Context()).Save(&items[i])
 		} else {
-			h.db.Create(&items[i])
+			h.db.WithContext(c.Request.Context()).Create(&items[i])
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"upserted": len(items)})

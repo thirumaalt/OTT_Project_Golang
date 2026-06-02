@@ -31,6 +31,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("db connect: %v", err)
 	}
+	if err := db.Use(telemetry.NewGormPlugin()); err != nil {
+		log.Fatalf("otelgorm plugin: %v", err)
+	}
 	db.AutoMigrate(&Subscription{})
 
 	shutdown := telemetry.InitTracer("subscription-service")
@@ -58,7 +61,7 @@ func getSubscription(c *gin.Context) {
 		return
 	}
 	var sub Subscription
-	if err := db.Where("user_id = ?", userID).First(&sub).Error; err != nil {
+	if err := db.WithContext(c.Request.Context()).Where("user_id = ?", userID).First(&sub).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
 		return
 	}
@@ -78,15 +81,15 @@ func upgradeSubscription(c *gin.Context) {
 	}
 
 	var sub Subscription
-	result := db.Where("user_id = ?", userID).First(&sub)
+	result := db.WithContext(c.Request.Context()).Where("user_id = ?", userID).First(&sub)
 	if result.Error != nil {
 		// Create new subscription
 		sub = Subscription{UserID: uint(userID), Plan: plan, UpdatedAt: time.Now()}
-		db.Create(&sub)
+		db.WithContext(c.Request.Context()).Create(&sub)
 	} else {
 		sub.Plan = plan
 		sub.UpdatedAt = time.Now()
-		db.Save(&sub)
+		db.WithContext(c.Request.Context()).Save(&sub)
 	}
 	c.JSON(http.StatusOK, sub)
 }

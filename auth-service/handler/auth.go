@@ -66,7 +66,7 @@ func (h *Handler) Register(c *gin.Context) {
 		Email:    req.Email,
 	}
 
-	if result := h.db.Create(&user); result.Error != nil {
+	if result := h.db.WithContext(c.Request.Context()).Create(&user); result.Error != nil {
 		// Return generic message — don't reveal whether username/email exists
 		c.JSON(http.StatusConflict, gin.H{"error": "registration failed"})
 		return
@@ -91,7 +91,7 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	var user store.User
-	if err := h.db.Where("username = ?", req.Username).First(&user).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).Where("username = ?", req.Username).First(&user).Error; err != nil {
 		// Constant-time response — prevents user enumeration
 		bcrypt.CompareHashAndPassword([]byte("$2a$12$placeholder"), []byte(req.Password))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})

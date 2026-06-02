@@ -31,6 +31,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("db connect: %v", err)
 	}
+	if err := db.Use(telemetry.NewGormPlugin()); err != nil {
+		log.Fatalf("otelgorm plugin: %v", err)
+	}
 	db.AutoMigrate(&WatchHistory{})
 
 	shutdown := telemetry.InitTracer("watchhistory-service")
@@ -42,6 +45,7 @@ func main() {
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	wh := r.Group("/api/watch-history")
 	wh.POST("/record", recordWatch)
+	wh.GET("/user", getByUser)
 	wh.GET("/all", getAll)
 
 	port := os.Getenv("PORT")
@@ -59,13 +63,24 @@ func recordWatch(c *gin.Context) {
 		return
 	}
 	wh := WatchHistory{UserID: uint(userID), ContentID: uint(contentID), WatchedAt: time.Now()}
-	db.Create(&wh)
+	db.WithContext(c.Request.Context()).Create(&wh)
 	c.JSON(http.StatusCreated, wh)
+}
+
+func getByUser(c *gin.Context) {
+	userID, err := strconv.ParseUint(c.Query("userId"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "userId required"})
+		return
+	}
+	var list []WatchHistory
+	db.WithContext(c.Request.Context()).Where("user_id = ?", userID).Order("watched_at desc").Find(&list)
+	c.JSON(http.StatusOK, list)
 }
 
 func getAll(c *gin.Context) {
 	var list []WatchHistory
-	db.Order("watched_at desc").Find(&list)
+	db.WithContext(c.Request.Context()).Order("watched_at desc").Find(&list)
 	c.JSON(http.StatusOK, list)
 }
 

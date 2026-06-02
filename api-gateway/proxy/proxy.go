@@ -5,11 +5,16 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+var proxyClient = &http.Client{
+	Transport: otelhttp.NewTransport(http.DefaultTransport),
+	Timeout:   30 * time.Second,
+}
 
 // To returns a gin handler that reverse-proxies to the given base URL.
 func To(baseURL string) gin.HandlerFunc {
@@ -60,11 +65,6 @@ func forward(c *gin.Context, target string, stream bool) {
 		return
 	}
 
-	otel.GetTextMapPropagator().Inject(
-		c.Request.Context(),
-		propagation.HeaderCarrier(req.Header),
-	)
-
 	// Copy headers, skip Host
 	for k, vals := range c.Request.Header {
 		if strings.ToLower(k) == "host" {
@@ -75,8 +75,7 @@ func forward(c *gin.Context, target string, stream bool) {
 		}
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := proxyClient.Do(req)
 	if err != nil {
 		log.Printf("Upstream error: %v", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "upstream service unavailable"})

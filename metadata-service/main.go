@@ -19,13 +19,16 @@ import (
 )
 
 func main() {
+	shutdown := telemetry.InitTracer("metadata-service")
+	defer shutdown()
+
 	db := store.Connect(os.Getenv("DATABASE_URL"))
+	if err := db.Use(telemetry.NewGormPlugin()); err != nil {
+		log.Fatalf("gorm plugin: %v", err)
+	}
 	store.Migrate(db)
 
 	h := handler.New(db)
-
-	shutdown := telemetry.InitTracer("metadata-service")
-	defer shutdown()
 
 	r := gin.Default()
 	r.Use(TracingMiddleware())
@@ -92,9 +95,9 @@ func discoverHandler(c *gin.Context) {
 		recommendations = []interface{}{}
 	}
 
-	// ── 2. Call watchhistory-service ────────────────────────────────────────
-	whURL := fmt.Sprintf("%s/api/watch-history/all",
-		getEnv("WATCHHISTORY_BASE_URL", "http://watchhistory-service:8090"))
+	// ── 2. Call watchhistory-service (user-scoped) ──────────────────────────
+	whURL := fmt.Sprintf("%s/api/watch-history/user?userId=%s",
+		getEnv("WATCHHISTORY_BASE_URL", "http://watchhistory-service:8090"), userID)
 
 	whReq, err := http.NewRequestWithContext(ctx, http.MethodGet, whURL, nil)
 	if err != nil {

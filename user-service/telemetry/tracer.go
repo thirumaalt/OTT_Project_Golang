@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"log"
+	"os"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -15,9 +16,14 @@ import (
 func InitTracer(serviceName string) func() {
 	ctx := context.Background()
 
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if endpoint == "" {
+		endpoint = "tempo:4317" // default for docker-compose
+	}
+
 	exporter, err := otlptracegrpc.New(
 		ctx,
-		otlptracegrpc.WithEndpoint("jaeger:4317"),
+		otlptracegrpc.WithEndpoint("passthrough:///"+endpoint),
 		otlptracegrpc.WithInsecure(),
 	)
 	if err != nil {

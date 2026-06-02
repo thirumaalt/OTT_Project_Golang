@@ -22,7 +22,7 @@ func (h *Handler) CreateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.db.Create(&u).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).Create(&u).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
 		return
 	}
@@ -36,7 +36,7 @@ func (h *Handler) GetUser(c *gin.Context) {
 		return
 	}
 	var u store.User
-	if err := h.db.First(&u, id).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).First(&u, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
@@ -55,7 +55,7 @@ func (h *Handler) GetByUsername(c *gin.Context) {
 		return
 	}
 	var u store.User
-	if err := h.db.Where("username = ?", username).First(&u).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).Where("username = ?", username).First(&u).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
@@ -78,12 +78,12 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 	}
 	// Verify user exists
 	var u store.User
-	if err := h.db.First(&u, req.UserID).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).First(&u, req.UserID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 	p := store.Profile{UserID: req.UserID, Name: req.Name, AvatarURL: req.AvatarURL}
-	if err := h.db.Create(&p).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).Create(&p).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create profile"})
 		return
 	}
@@ -97,14 +97,14 @@ func (h *Handler) GetProfiles(c *gin.Context) {
 		return
 	}
 	var profiles []store.Profile
-	h.db.Where("user_id = ?", userID).Find(&profiles)
+	h.db.WithContext(c.Request.Context()).Where("user_id = ?", userID).Find(&profiles)
 	c.JSON(http.StatusOK, profiles)
 }
 
 func (h *Handler) GetProfile(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	var p store.Profile
-	if err := h.db.First(&p, id).Error; err != nil {
+	if err := h.db.WithContext(c.Request.Context()).First(&p, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "profile not found"})
 		return
 	}
@@ -113,7 +113,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 
 func (h *Handler) DeleteProfile(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	h.db.Delete(&store.Profile{}, id)
+	h.db.WithContext(c.Request.Context()).Delete(&store.Profile{}, id)
 	c.Status(http.StatusNoContent)
 }
 
@@ -128,16 +128,16 @@ func (h *Handler) SaveHistory(c *gin.Context) {
 	wh.LastWatched = time.Now()
 
 	var existing store.WatchHistory
-	err := h.db.Where("profile_id = ? AND media_path = ?", wh.ProfileID, wh.MediaPath).First(&existing).Error
+	err := h.db.WithContext(c.Request.Context()).Where("profile_id = ? AND media_path = ?", wh.ProfileID, wh.MediaPath).First(&existing).Error
 	if err == nil {
 		existing.ProgressSeconds = wh.ProgressSeconds
 		existing.TotalDuration = wh.TotalDuration
 		existing.LastWatched = time.Now()
-		h.db.Save(&existing)
+		h.db.WithContext(c.Request.Context()).Save(&existing)
 		c.JSON(http.StatusOK, existing)
 		return
 	}
-	h.db.Create(&wh)
+	h.db.WithContext(c.Request.Context()).Create(&wh)
 	c.JSON(http.StatusCreated, wh)
 }
 
@@ -148,7 +148,7 @@ func (h *Handler) GetHistory(c *gin.Context) {
 		return
 	}
 	var history []store.WatchHistory
-	h.db.Where("profile_id = ?", profileID).Order("last_watched desc").Find(&history)
+	h.db.WithContext(c.Request.Context()).Where("profile_id = ?", profileID).Order("last_watched desc").Find(&history)
 	c.JSON(http.StatusOK, history)
 }
 
@@ -161,18 +161,18 @@ func (h *Handler) AddToWatchlist(c *gin.Context) {
 		return
 	}
 	var existing store.Watchlist
-	if err := h.db.Where("profile_id = ? AND media_path = ?", wl.ProfileID, wl.MediaPath).First(&existing).Error; err == nil {
+	if err := h.db.WithContext(c.Request.Context()).Where("profile_id = ? AND media_path = ?", wl.ProfileID, wl.MediaPath).First(&existing).Error; err == nil {
 		c.JSON(http.StatusOK, existing) // already in list
 		return
 	}
-	h.db.Create(&wl)
+	h.db.WithContext(c.Request.Context()).Create(&wl)
 	c.JSON(http.StatusCreated, wl)
 }
 
 func (h *Handler) RemoveFromWatchlist(c *gin.Context) {
 	profileID, _ := strconv.ParseUint(c.Query("profileId"), 10, 64)
 	mediaPath := c.Query("mediaPath")
-	h.db.Where("profile_id = ? AND media_path = ?", profileID, mediaPath).Delete(&store.Watchlist{})
+	h.db.WithContext(c.Request.Context()).Where("profile_id = ? AND media_path = ?", profileID, mediaPath).Delete(&store.Watchlist{})
 	c.Status(http.StatusNoContent)
 }
 
@@ -183,7 +183,7 @@ func (h *Handler) GetWatchlist(c *gin.Context) {
 		return
 	}
 	var list []store.Watchlist
-	h.db.Where("profile_id = ?", profileID).Find(&list)
+	h.db.WithContext(c.Request.Context()).Where("profile_id = ?", profileID).Find(&list)
 	c.JSON(http.StatusOK, list)
 }
 
@@ -191,7 +191,7 @@ func (h *Handler) GetWatchlist(c *gin.Context) {
 
 func (h *Handler) GetTrending(c *gin.Context) {
 	var results []struct{ MediaPath string }
-	h.db.Model(&store.WatchHistory{}).
+	h.db.WithContext(c.Request.Context()).Model(&store.WatchHistory{}).
 		Select("media_path").
 		Group("media_path").
 		Order("count(*) desc").

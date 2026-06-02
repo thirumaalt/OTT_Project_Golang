@@ -38,6 +38,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("db connect: %v", err)
 	}
+	if err := db.Use(telemetry.NewGormPlugin()); err != nil {
+		log.Fatalf("otelgorm plugin: %v", err)
+	}
 	db.AutoMigrate(&PaymentOrder{})
 
 	shutdown := telemetry.InitTracer("payment-service")
@@ -82,7 +85,7 @@ func createOrder(c *gin.Context) {
 		Status:  "CREATED",
 		Receipt: "receipt_" + generateOrderID(),
 	}
-	db.Create(&order)
+	db.WithContext(c.Request.Context()).Create(&order)
 	c.JSON(http.StatusCreated, order)
 }
 
@@ -94,21 +97,18 @@ func capturePayment(c *gin.Context) {
 	}
 
 	var order PaymentOrder
-	if err := db.First(&order, "id = ?", orderID).Error; err != nil {
+	if err := db.WithContext(c.Request.Context()).First(&order, "id = ?", orderID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "order not found"})
 		return
 	}
 
 	order.Status = "CAPTURED"
-	db.Save(&order)
+	db.WithContext(c.Request.Context()).Save(&order)
 
-	// ── Propagate trace context to subscription-service ──────────────────────
-	go func() {
-		ctx := c.Request.Context()
-		if err := notifySubscriptionService(ctx, order.UserID, order.PlanID); err != nil {
-			log.Printf("subscription-service notification failed: %v", err)
-		}
-	}()
+	// ── Notify subscription-service synchronously so the trace is complete ──
+	if err := notifySubscriptionService(c.Request.Context(), order.UserID, order.PlanID); err != nil {
+		log.Printf("subscription-service notification failed: %v", err)
+	}
 
 	c.JSON(http.StatusOK, order)
 }
@@ -146,7 +146,7 @@ func notifySubscriptionService(ctx context.Context, userID uint, planID string) 
 
 func getStatus(c *gin.Context) {
 	var order PaymentOrder
-	if err := db.First(&order, "id = ?", c.Param("orderId")).Error; err != nil {
+	if err := db.WithContext(c.Request.Context()).First(&order, "id = ?", c.Param("orderId")).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "order not found"})
 		return
 	}
