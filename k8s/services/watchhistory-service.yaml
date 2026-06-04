@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: watchhistory-service
+  namespace: myflix
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: watchhistory-service
+  template:
+    metadata:
+      labels:
+        app: watchhistory-service
+    spec:
+      containers:
+        - name: watchhistory-service
+          image: thiru98/watchhistory-service:latest
+          ports:
+            - containerPort: 8090
+          env:
+            - name: PORT
+              value: "8090"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: jwt-secret
+          envFrom:
+            - configMapRef:
+                name: app-config
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: watchhistory-service
+  namespace: myflix
+spec:
+  selector:
+    app: watchhistory-service
+  ports:
+    - port: 8090
+      targetPort: 8090

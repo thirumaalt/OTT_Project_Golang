@@ -1,0 +1,164 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: myflix
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 30s
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ["alertmanager:9093"]
+
+    rule_files:
+      - /etc/prometheus/alert_rules.yml
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ["localhost:9090"]
+
+      - job_name: api-gateway
+        static_configs:
+          - targets: ["api-gateway:8094"]
+
+      - job_name: auth-service
+        static_configs:
+          - targets: ["auth-service:8083"]
+
+      - job_name: user-service
+        static_configs:
+          - targets: ["user-service:8085"]
+
+      - job_name: analytics-service
+        static_configs:
+          - targets: ["analytics-service:8086"]
+
+      - job_name: recommendation-service
+        static_configs:
+          - targets: ["recommendation-service:8087"]
+
+      - job_name: metadata-service
+        static_configs:
+          - targets: ["metadata-service:8088"]
+
+      - job_name: interaction-service
+        static_configs:
+          - targets: ["interaction-service:8089"]
+
+      - job_name: watchhistory-service
+        static_configs:
+          - targets: ["watchhistory-service:8090"]
+
+      - job_name: payment-service
+        static_configs:
+          - targets: ["payment-service:8091"]
+
+      - job_name: subscription-service
+        static_configs:
+          - targets: ["subscription-service:8093"]
+
+      - job_name: media-library-service
+        static_configs:
+          - targets: ["media-library-service:8001"]
+
+      - job_name: node-exporter
+        static_configs:
+          - targets: ["node-exporter:9100"]
+
+      - job_name: cadvisor
+        static_configs:
+          - targets: ["cadvisor:8080"]
+
+      - job_name: kube-state-metrics
+        static_configs:
+          - targets: ["kube-state-metrics:8080"]
+
+  alert_rules.yml: |
+    groups:
+      - name: service_health
+        rules:
+          - alert: ServiceDown
+            expr: up == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Service {{ $labels.job }} is down"
+
+          - alert: HighErrorRate
+            expr: rate(gin_requests_total{status=~"5.."}[5m]) / rate(gin_requests_total[5m]) > 0.05
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High error rate on {{ $labels.job }}"
+
+          - alert: HighLatency
+            expr: histogram_quantile(0.99, rate(gin_request_duration_seconds_bucket[5m])) > 2
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High p99 latency on {{ $labels.job }}"
+
+          - alert: HighMemoryUsage
+            expr: container_memory_usage_bytes{container!=""} > 524288000
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory on {{ $labels.container }}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: myflix
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:latest
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: myflix
+spec:
+  selector:
+    app: prometheus
+  type: NodePort
+  ports:
+    - port: 9090
+      targetPort: 9090
+      nodePort: 30090
