@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { api } from '../api/client'
 
 export default function Library() {
     const [content, setContent] = useState([])
@@ -11,16 +12,13 @@ export default function Library() {
     useEffect(() => {
         const fetchContent = async () => {
             try {
-                const res = await fetch('/api/cms/content')
-                if (res.ok) {
-                    const data = await res.json()
-                    setContent(data.content || [])
-                    setFilteredContent(data.content || [])
-                } else {
-                    setError('Failed to fetch content')
-                }
+                const data = await api('/cms/content')
+                // API returns { results: [...], total: N }
+                const items = data.results || data.content || []
+                setContent(items)
+                setFilteredContent(items)
             } catch (err) {
-                setError('Failed to connect to CMS service')
+                setError('Failed to fetch content')
             } finally {
                 setLoading(false)
             }
@@ -50,15 +48,9 @@ export default function Library() {
         if (!confirm(`Are you sure you want to PERMANENTLY delete "${key}"? This cannot be undone.`)) return
 
         try {
-            const res = await fetch(`/api/cms/content/${encodeURIComponent(key)}`, {
-                method: 'DELETE'
-            })
-            if (res.ok) {
-                setContent(prev => prev.filter(item => item.key !== key))
-                alert('Content deleted successfully')
-            } else {
-                alert('Failed to delete content')
-            }
+            await api(`/cms/content/${encodeURIComponent(key)}`, { method: 'DELETE' })
+            setContent(prev => prev.filter(item => item.key !== key))
+            alert('Content deleted successfully')
         } catch (err) {
             alert('Delete error: ' + err.message)
         }

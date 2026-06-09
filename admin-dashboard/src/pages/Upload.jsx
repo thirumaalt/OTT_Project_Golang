@@ -51,8 +51,12 @@ export default function Upload() {
                 // We'll just set it to 50% immediately, then 100% on completion.
                 updateItem(item.id, { progress: 20 })
 
+                const token = localStorage.getItem('token')
                 const res = await fetch(`${API_BASE}/cms/upload`, {
                     method: 'POST',
+                    headers: {
+                        ...(token && { 'Authorization': `Bearer ${token}` })
+                    },
                     body: formData
                 })
 

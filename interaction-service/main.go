@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grafana/pyroscope-go"
 	"github.com/myflix/interaction-service/telemetry"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
@@ -34,6 +35,15 @@ type Rating struct {
 var db *gorm.DB
 
 func main() {
+	pyroscope.Start(pyroscope.Config{
+		ApplicationName: "interaction-service",
+		ServerAddress:   "http://pyroscope:4040",
+		ProfileTypes: []pyroscope.ProfileType{
+			pyroscope.ProfileCPU,
+			pyroscope.ProfileAllocObjects,
+			pyroscope.ProfileGoroutines,
+		},
+	})
 	var err error
 	db, err = gorm.Open(postgres.Open(os.Getenv("DATABASE_URL")), &gorm.Config{})
 	if err != nil {

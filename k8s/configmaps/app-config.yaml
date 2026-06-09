@@ -16,3 +16,4 @@ data:
   PAYMENT_BASE_URL: http://payment-service:8091
   SUBSCRIPTION_BASE_URL: http://subscription-service:8093
   MEDIA_BASE_URL: http://media-library-service:8001
+  TRANSCODING_BASE_URL: http://transcoding-service:8092

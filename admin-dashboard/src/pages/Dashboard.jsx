@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { api } from '../api/client'
 
 export default function Dashboard() {
     const [stats, setStats] = useState({
@@ -17,65 +18,52 @@ export default function Dashboard() {
 
     useEffect(() => {
         const fetchAllData = async () => {
+            // Fetch transcoding status
             try {
-                // Fetch transcoding status
-                const transcodeRes = await fetch('/api/transcoding/status')
-                if (transcodeRes.ok) {
-                    const data = await transcodeRes.json()
-                    setStats(prev => ({
-                        ...prev,
-                        pendingTranscode: data.pending_count || 0,
-                        completedToday: data.completed_count || 0,
-                        failedCount: data.failed_count || 0
-                    }))
-
-                    // Build recent activity from transcoding data
-                    const activities = []
-                    if (data.processing) {
-                        activities.push({ type: 'transcoding', message: `Transcoding: ${data.processing.split('/').pop()}`, time: 'Now' })
-                    }
-                    if (data.pending && data.pending.length > 0) {
-                        activities.push({ type: 'queue', message: `${data.pending.length} videos in queue`, time: 'Pending' })
-                    }
-                    setRecentActivity(prev => [...activities, ...prev].slice(0, 5))
+                const data = await api('/transcoding/status')
+                setStats(prev => ({
+                    ...prev,
+                    pendingTranscode: data.pending_count || 0,
+                    completedToday: data.completed_count || 0,
+                    failedCount: data.failed_count || 0
+                }))
+                const activities = []
+                if (data.processing) {
+                    activities.push({ type: 'transcoding', message: `Transcoding: ${data.processing.split('/').pop()}`, time: 'Now' })
                 }
-
-                // Fetch library stats
-                const libraryRes = await fetch('/api/media/library')
-                if (libraryRes.ok) {
-                    const data = await libraryRes.json()
-                    const total = data.total || 0
-                    setStats(prev => ({ ...prev, totalVideos: total }))
-
-                    // Count by category
-                    const breakdown = { Movies: 0, TvShows: 0, Anime: 0 }
-                    if (data.results) {
-                        data.results.forEach(item => {
-                            if (breakdown[item.category] !== undefined) {
-                                breakdown[item.category]++
-                            }
-                        })
-                    }
-                    setCategoryBreakdown(breakdown)
+                if (data.pending && data.pending.length > 0) {
+                    activities.push({ type: 'queue', message: `${data.pending.length} videos in queue`, time: 'Pending' })
                 }
-
-                // Fetch HLS ready content
-                const hlsRes = await fetch('/api/media/library/hls')
-                if (hlsRes.ok) {
-                    const data = await hlsRes.json()
-                    if (data.total > 0) {
-                        setRecentActivity(prev => [
-                            { type: 'success', message: `${data.total} videos ready to stream`, time: 'Live' },
-                            ...prev
-                        ].slice(0, 5))
-                    }
-                }
-
-            } catch (error) {
-                console.error('Failed to fetch dashboard data:', error)
-            } finally {
-                setLoading(false)
+                setRecentActivity(prev => [...activities, ...prev].slice(0, 5))
+            } catch (err) {
+                console.error('Failed to fetch transcoding status:', err)
             }
+
+            // Fetch library stats
+            try {
+                const data = await api('/media/library')
+                setStats(prev => ({ ...prev, totalVideos: data.total || 0 }))
+                const breakdown = { Movies: 0, TvShows: 0, Anime: 0 }
+                if (data.results) {
+                    data.results.forEach(item => {
+                        if (breakdown[item.category] !== undefined) breakdown[item.category]++
+                    })
+                }
+                setCategoryBreakdown(breakdown)
+
+                // Count HLS-ready from the same response
+                const hlsReady = (data.results || []).filter(item => item.hls_url).length
+                if (hlsReady > 0) {
+                    setRecentActivity(prev => [
+                        { type: 'success', message: `${hlsReady} videos ready to stream`, time: 'Live' },
+                        ...prev
+                    ].slice(0, 5))
+                }
+            } catch (err) {
+                console.error('Failed to fetch library stats:', err)
+            }
+
+            setLoading(false)
         }
 
         fetchAllData()

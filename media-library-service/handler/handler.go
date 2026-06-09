@@ -235,6 +235,72 @@ func (h *Handler) Stream(c *gin.Context) {
 	io.CopyN(c.Writer, file, contentLength)
 }
 
+func (h *Handler) Upload(c *gin.Context) {
+	title := c.PostForm("title")
+	category := c.PostForm("category")
+	if category == "" {
+		category = "movies"
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file field required"})
+		return
+	}
+
+	// Map category to directory name
+	dirName := getCategoryDir(category)
+
+	// Build destination directory: <mediaDir>/<Category>/
+	baseDir := h.scanner.GetMediaPath("") // returns mediaDirs[0] when path not found
+	// GetMediaPath returns mediaDirs[0]+"/", strip trailing separator
+	destDir := filepath.Join(baseDir, dirName)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create directory"})
+		return
+	}
+
+	filename := filepath.Base(fileHeader.Filename)
+	// Sanitize: reject traversal attempts
+	if strings.Contains(filename, "..") || strings.ContainsAny(filename, `/\`) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid filename"})
+		return
+	}
+
+	destPath := filepath.Join(destDir, filename)
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to open uploaded file"})
+		return
+	}
+	defer src.Close()
+
+	dst, err := os.Create(destPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write file"})
+		return
+	}
+
+	relPath := dirName + "/" + filename
+	if title == "" {
+		title = strings.TrimSuffix(filename, filepath.Ext(filename))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"path":     relPath,
+		"title":    title,
+		"category": category,
+		"filename": filename,
+	})
+}
+
 func (h *Handler) GetHLSFile(c *gin.Context) {
 	fileID := c.Param("file_id")
 	filename := c.Param("filename")

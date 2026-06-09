@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grafana/pyroscope-go"
 	"github.com/myflix/media-library-service/handler"
 	"github.com/myflix/media-library-service/scanner"
 	"github.com/myflix/media-library-service/telemetry"
@@ -14,6 +15,16 @@ import (
 )
 
 func main() {
+	pyroscope.Start(pyroscope.Config{
+		ApplicationName: "media-library-service",
+		ServerAddress:   "http://pyroscope:4040",
+		ProfileTypes: []pyroscope.ProfileType{
+			pyroscope.ProfileCPU,
+			pyroscope.ProfileAllocObjects,
+			pyroscope.ProfileGoroutines,
+		},
+	})
+
 	// Configuration
 	mediaDir := os.Getenv("MEDIA_DATA_DIR")
 	if mediaDir == "" {
@@ -43,6 +54,7 @@ func main() {
 	media.GET("/search", h.Search)
 	media.GET("/stream", h.Stream)
 	media.GET("/hls/:file_id/:filename", h.GetHLSFile)
+	media.POST("/upload", h.Upload)
 
 	port := os.Getenv("PORT")
 	if port == "" {

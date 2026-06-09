@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/grafana/pyroscope-go"
 	"github.com/myflix/api-gateway/proxy"
 	"github.com/myflix/api-gateway/telemetry"
 	"github.com/prometheus/client_golang/prometheus"
@@ -38,6 +39,17 @@ var httpRequestDuration = prometheus.NewHistogramVec(
 )
 
 func main() {
+
+	pyroscope.Start(pyroscope.Config{
+		ApplicationName: "api-gateway",
+		ServerAddress:   "http://pyroscope:4040",
+		ProfileTypes: []pyroscope.ProfileType{
+			pyroscope.ProfileCPU,
+			pyroscope.ProfileAllocObjects,
+			pyroscope.ProfileGoroutines,
+		},
+	})
+
 	prometheus.MustRegister(httpRequestsTotal)
 	prometheus.MustRegister(httpRequestDuration)
 	secret := os.Getenv("JWT_SECRET")
@@ -76,6 +88,11 @@ func main() {
 	protected.Any("/api/media/*path", proxy.MediaProxy(envURL("MEDIA_BASE_URL", "http://media-library-service:8001")+"/api/media"))
 	protected.Any("/api/transcoding/status", proxy.To(envURL("TRANSCODING_BASE_URL", "http://transcoding-service:8092")+"/queue/status"))
 	protected.Any("/api/transcoding/transcode", proxy.To(envURL("TRANSCODING_BASE_URL", "http://transcoding-service:8092")+"/transcode"))
+	protected.Any("/api/cms/upload", proxy.To(envURL("MEDIA_BASE_URL", "http://media-library-service:8001")+"/api/media/upload"))
+	protected.GET("/api/cms/content", proxy.To(envURL("MEDIA_BASE_URL", "http://media-library-service:8001")+"/api/media/library"))
+	protected.DELETE("/api/cms/content/*path", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "deleted"})
+	})
 
 	port := envURL("PORT", "8094")
 	log.Printf("API Gateway listening on :%s", port)

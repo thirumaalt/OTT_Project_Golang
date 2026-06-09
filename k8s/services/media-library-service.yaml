@@ -26,12 +26,26 @@ spec:
           volumeMounts:
             - name: media-data
               mountPath: /media
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
           readinessProbe:
             httpGet:
               path: /health
               port: 8001
             initialDelaySeconds: 5
             periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
       volumes:
         - name: media-data
           hostPath:

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transcoding-service
+  namespace: myflix
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transcoding-service
+  template:
+    metadata:
+      labels:
+        app: transcoding-service
+    spec:
+      containers:
+        - name: transcoding-service
+          image: thiru98/transcoding-service:latest
+          ports:
+            - containerPort: 8092
+          env:
+            - name: MEDIA_DATA_DIR
+              value: /media
+            - name: HLS_OUTPUT_DIR
+              value: /media/hls
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8092
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8092
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transcoding-service
+  namespace: myflix
+spec:
+  selector:
+    app: transcoding-service
+  ports:
+    - port: 8092
+      targetPort: 8092

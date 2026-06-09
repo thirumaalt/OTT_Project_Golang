@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grafana/pyroscope-go"
 	"github.com/myflix/user-service/handler"
 	"github.com/myflix/user-service/store"
 	"github.com/myflix/user-service/telemetry"
@@ -14,6 +15,17 @@ import (
 )
 
 func main() {
+
+	pyroscope.Start(pyroscope.Config{
+		ApplicationName: "user-service",
+		ServerAddress:   "http://pyroscope:4040",
+		ProfileTypes: []pyroscope.ProfileType{
+			pyroscope.ProfileCPU,
+			pyroscope.ProfileAllocObjects,
+			pyroscope.ProfileGoroutines,
+		},
+	})
+
 	shutdown := telemetry.InitTracer("user-service")
 	defer shutdown()
 

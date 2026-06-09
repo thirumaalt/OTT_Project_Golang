@@ -32,3 +32,9 @@ datasources:
         datasourceUid: prometheus
       nodeGraph:
         enabled: true
+
+  - name: Pyroscope
+    type: grafana-pyroscope-datasource
+    uid: pyroscope
+    url: http://pyroscope:4040
+    editable: true

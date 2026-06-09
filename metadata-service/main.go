@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/grafana/pyroscope-go"
 	"github.com/myflix/metadata-service/handler"
 	"github.com/myflix/metadata-service/store"
 	"github.com/myflix/metadata-service/telemetry"
@@ -19,6 +20,16 @@ import (
 )
 
 func main() {
+	pyroscope.Start(pyroscope.Config{
+		ApplicationName: "metadata-service",
+		ServerAddress:   "http://pyroscope:4040",
+		ProfileTypes: []pyroscope.ProfileType{
+			pyroscope.ProfileCPU,
+			pyroscope.ProfileAllocObjects,
+			pyroscope.ProfileGoroutines,
+		},
+	})
+
 	shutdown := telemetry.InitTracer("metadata-service")
 	defer shutdown()
 

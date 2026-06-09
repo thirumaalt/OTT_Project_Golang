@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { api } from '../api/client'
 
 export default function Transcoding() {
     const [status, setStatus] = useState(null)
@@ -10,18 +11,14 @@ export default function Transcoding() {
 
     const fetchStatus = async () => {
         try {
-            const res = await fetch('/api/transcoding/status')
-            if (res.ok) {
-                const data = await res.json()
-                setStatus(data)
-                setError(null)
-            } else {
-                setError('Failed to fetch status')
-            }
+            const data = await api('/transcoding/status')
+            setStatus(data)
+            setError(null)
             setLastUpdated(new Date())
         } catch (err) {
             console.error('Failed to fetch transcoding status', err)
-            setError('Failed to connect to Transcoding Service')
+            setError('Failed to fetch status')
+            setLastUpdated(new Date())
         }
     }
 
@@ -30,21 +27,15 @@ export default function Transcoding() {
         setRetranscodeLoading(true)
         setRetranscodeMsg(null)
         try {
-            const res = await fetch('/api/transcoding/transcode', {
+            const data = await api('/transcoding/transcode', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: retranscodePath.trim(), force: true })
+                body: { path: retranscodePath.trim(), force: true }
             })
-            const data = await res.json()
-            if (res.ok) {
-                setRetranscodeMsg({ type: 'success', text: `✅ Queued: ${data.file_id}` })
-                setRetranscodePath('')
-                fetchStatus()
-            } else {
-                setRetranscodeMsg({ type: 'error', text: `❌ ${data.detail || 'Failed'}` })
-            }
+            setRetranscodeMsg({ type: 'success', text: `✅ Queued: ${data.file_id}` })
+            setRetranscodePath('')
+            fetchStatus()
         } catch (err) {
-            setRetranscodeMsg({ type: 'error', text: '❌ Request failed' })
+            setRetranscodeMsg({ type: 'error', text: `❌ ${err.message || 'Request failed'}` })
         }
         setRetranscodeLoading(false)
     }
