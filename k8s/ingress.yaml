@@ -13,6 +13,13 @@ spec:
   rules:
     - http:
         paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8094
           - path: /
             pathType: Prefix
             backend:
@@ -20,3 +27,4 @@ spec:
                 name: frontend
                 port:
                   number: 80
+
