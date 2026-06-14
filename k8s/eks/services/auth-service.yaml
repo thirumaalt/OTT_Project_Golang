@@ -1,0 +1,113 @@
+# EKS auth-service Deployment
+#
+# DIFFERENCES FROM LOCAL (k8s/services/auth-service.yaml):
+#
+# 1. serviceAccountName: auth-service-sa
+#    → IRSA — links pod to IAM Role for AWS access
+#    → local has no serviceAccountName (uses default)
+#
+# 2. image: uses ECR instead of Docker Hub
+#    → local:  thiru98/auth-service:latest (Docker Hub)
+#    → EKS:    ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/auth-service:latest (ECR)
+#
+# 3. DATABASE_URL — from AWS Secrets Manager via ESO
+#    → local:  from k8s Secret (base64)
+#    → EKS:    from ExternalSecret (AWS Secrets Manager)
+#
+# 4. JWT_SECRET — from AWS Secrets Manager via ESO
+#    → local:  from k8s Secret app-secret
+#    → EKS:    from ExternalSecret jwt-secret
+#
+# 5. AWS_REGION added — needed for AWS SDK calls
+#
+# 6. Dockerfile.eks used — distroless base for RDS SSL support
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: myflix
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      # IRSA — pod gets IAM role automatically
+      # Defined in k8s/eks/serviceaccounts.yaml
+      serviceAccountName: auth-service-sa
+      containers:
+        - name: auth-service
+          # ECR image — replace ACCOUNT_ID with your AWS account ID
+          image: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/auth-service:latest
+          ports:
+            - containerPort: 8083
+          env:
+            - name: PORT
+              value: "8083"
+
+            # Same service DNS — works same on EKS
+            - name: USER_SERVICE_URL
+              value: http://user-service:8085
+
+            # DATABASE_URL — from AWS Secrets Manager via ESO
+            # ESO creates k8s Secret "postgres-secret" from AWS Secrets Manager
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret    # created by ExternalSecret in secrets.yaml
+                  key: DATABASE_URL
+
+            # JWT_SECRET — from AWS Secrets Manager via ESO
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret         # created by ExternalSecret in secrets.yaml
+                  key: JWT_SECRET
+
+            # AWS region — needed for AWS SDK
+            - name: AWS_REGION
+              value: us-east-1
+
+            # Floci endpoint — uncomment when testing with Floci locally
+            # - name: AWS_ENDPOINT_URL
+            #   value: http://floci:4566
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8083
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8083
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+---
+# Service — identical to local
+# Service DNS names never change between local and EKS
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: myflix
+spec:
+  selector:
+    app: auth-service
+  ports:
+    - port: 8083
+      targetPort: 8083
