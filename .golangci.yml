@@ -1,0 +1,23 @@
+# Starting baseline for golangci-lint across all Go services.
+# It's intentionally lenient so it doesn't drown the first runs in noise.
+# Tighten by adding linters (gosec, revive, staticcheck extras) as the code
+# gets cleaned up, then flip continue-on-error to false in ci.yml.
+run:
+  timeout: 5m
+  tests: false
+
+linters:
+  disable-all: true
+  enable:
+    - govet # suspicious constructs
+    - ineffassign # unused assignments
+    - unused # unused code
+    - errcheck # unchecked errors
+    - staticcheck # static analysis
+    - gosimple # simplifications
+
+issues:
+  exclude-dirs:
+    - vendor
+  max-issues-per-linter: 0
+  max-same-issues: 0
