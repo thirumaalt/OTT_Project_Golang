@@ -1,0 +1,172 @@
+name: CI
+
+# Monorepo CI for the myflix OTT platform.
+#   PR  -> build + lint + Trivy scan only (no push)
+#   main-> build + lint + Trivy scan + push to Docker Hub
+# Only services whose files changed are built (path-filtered matrix).
+# Manual full rebuild: Actions tab -> Run workflow -> build_all = true
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_all:
+        description: "Build every service regardless of changes"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY_NAMESPACE: thiru98 # Docker Hub namespace (matches k8s manifests)
+  GO_VERSION: "1.25"
+  DOCKERFILE: Dockerfile # switch to Dockerfile.eks when you move to ECR
+  TRIVY_SEVERITY: "HIGH,CRITICAL"
+  TRIVY_EXIT_CODE: "0" # set to "1" to FAIL the build on findings
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Detect which services changed -> emit a JSON matrix
+  # ---------------------------------------------------------------------------
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            admin-dashboard: 'admin-dashboard/**'
+            analytics-service: 'analytics-service/**'
+            api-gateway: 'api-gateway/**'
+            auth-service: 'auth-service/**'
+            frontend-ui: 'frontend-ui/**'
+            interaction-service: 'interaction-service/**'
+            media-library-service: 'media-library-service/**'
+            metadata-service: 'metadata-service/**'
+            payment-service: 'payment-service/**'
+            recommendation-service: 'recommendation-service/**'
+            subscription-service: 'subscription-service/**'
+            transcoding-service: 'transcoding-service/**'
+            user-service: 'user-service/**'
+            watchhistory-service: 'watchhistory-service/**'
+
+      - name: Decide matrix
+        id: set
+        run: |
+          ALL='["admin-dashboard","analytics-service","api-gateway","auth-service","frontend-ui","interaction-service","media-library-service","metadata-service","payment-service","recommendation-service","subscription-service","transcoding-service","user-service","watchhistory-service"]'
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.build_all }}" = "true" ]; then
+            echo "services=$ALL" >> "$GITHUB_OUTPUT"
+          else
+            echo 'services=${{ steps.filter.outputs.changes }}' >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 2. Build + scan (+ push on main) — one matrix leg per changed service
+  # ---------------------------------------------------------------------------
+  build:
+    needs: detect
+    if: ${{ needs.detect.outputs.services != '[]' && needs.detect.outputs.services != '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect language
+        id: lang
+        run: |
+          if   [ -f "${{ matrix.service }}/go.mod" ];      then echo "lang=go"   >> "$GITHUB_OUTPUT"
+          elif [ -f "${{ matrix.service }}/package.json" ]; then echo "lang=node" >> "$GITHUB_OUTPUT"
+          else echo "lang=other" >> "$GITHUB_OUTPUT"; fi
+
+      # ---- Go fast-feedback: vet + build + lint (before the Docker build) ----
+      - name: Setup Go
+        if: steps.lang.outputs.lang == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ matrix.service }}/go.sum
+
+      - name: go vet & build
+        if: steps.lang.outputs.lang == 'go'
+        working-directory: ${{ matrix.service }}
+        run: |
+          go mod download
+          go vet ./...
+          go build ./...
+
+      - name: golangci-lint
+        if: steps.lang.outputs.lang == 'go'
+        continue-on-error: true # informational until the codebase is lint-clean; flip to false to enforce
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: ${{ matrix.service }}
+          args: --timeout=5m
+
+      # ---- Image vars ----
+      - name: Image vars
+        id: img
+        run: |
+          echo "image=${{ env.REGISTRY_NAMESPACE }}/${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      # ---- Build (plain docker; image stays local for scan + push) ----
+      - name: Build image
+        run: |
+          docker build \
+            -f "${{ matrix.service }}/${{ env.DOCKERFILE }}" \
+            -t "${{ steps.img.outputs.image }}:${{ steps.img.outputs.sha }}" \
+            -t "${{ steps.img.outputs.image }}:latest" \
+            "${{ matrix.service }}"
+
+      # ---- Trivy image scan ----
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.img.outputs.image }}:${{ steps.img.outputs.sha }}
+          format: table
+          severity: ${{ env.TRIVY_SEVERITY }}
+          exit-code: ${{ env.TRIVY_EXIT_CODE }}
+          ignore-unfixed: true
+
+      # ---- Push (main only) ----
+      - name: Login to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker push "${{ steps.img.outputs.image }}:${{ steps.img.outputs.sha }}"
+          docker push "${{ steps.img.outputs.image }}:latest"
+
+  # ---------------------------------------------------------------------------
+  # 3. SonarQube static analysis (whole repo, once)
+  # ---------------------------------------------------------------------------
+  sonarqube:
+    needs: detect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history -> better Sonar blame/new-code detection
+      # SonarQube Server: keep this action.
+      # SonarCloud: replace with SonarSource/sonarcloud-github-action and set sonar.organization.
+      - uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
