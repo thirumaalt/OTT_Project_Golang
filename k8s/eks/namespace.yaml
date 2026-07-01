@@ -1,7 +1,0 @@
-# Same as kind — namespace is the same on EKS
-# Apply this first before anything else
-# kubectl apply -f k8s/eks/namespace.yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: myflix
