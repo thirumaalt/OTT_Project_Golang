@@ -1,0 +1,135 @@
+# MyFlix — default values (used for local/kind cluster)
+
+namespace: myflix
+
+# Global image settings
+image:
+  registry: localhost:5001   # kind local registry
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# All 13 services
+services:
+  auth-service:
+    port: 8083
+    replicas: 1
+    env:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/auth?sslmode=disable"
+      PORT: "8083"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  user-service:
+    port: 8085
+    replicas: 1
+    env:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/users?sslmode=disable"
+      PORT: "8085"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  api-gateway:
+    port: 8094
+    replicas: 1
+    env:
+      PORT: "8094"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  content-service:
+    port: 8086
+    replicas: 1
+    env:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/content?sslmode=disable"
+      PORT: "8086"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  streaming-service:
+    port: 8087
+    replicas: 1
+    env:
+      PORT: "8087"
+      MEDIA_DATA_DIR: "/media"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  subscription-service:
+    port: 8088
+    replicas: 1
+    env:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/subscription?sslmode=disable"
+      PORT: "8088"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  recommendation-service:
+    port: 8089
+    replicas: 1
+    env:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/recommendation?sslmode=disable"
+      PORT: "8089"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  watchhistory-service:
+    port: 8090
+    replicas: 1
+    env:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/watchhistory?sslmode=disable"
+      PORT: "8090"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  notification-service:
+    port: 8091
+    replicas: 1
+    env:
+      PORT: "8091"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  search-service:
+    port: 8093
+    replicas: 1
+    env:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/search?sslmode=disable"
+      PORT: "8093"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  transcoding-service:
+    port: 8092
+    replicas: 1
+    env:
+      PORT: "8092"
+      MEDIA_DATA_DIR: "/media"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  media-library-service:
+    port: 8095
+    replicas: 1
+    env:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/media?sslmode=disable"
+      PORT: "8095"
+      MEDIA_DATA_DIR: "/media"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4317"
+      PYROSCOPE_SERVER_ADDRESS: "http://pyroscope:4040"
+
+  frontend:
+    port: 80
+    replicas: 1
+    env: {}
+
+# Ingress
+ingress:
+  className: nginx
+  host: ""   # empty = use IP directly (kind)
+
+# HPA defaults (applied to all services)
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 50
